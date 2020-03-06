@@ -118,18 +118,21 @@ class Pokemon():
         if attack is not VAL.DONT_SET:
             self.iv_attack = attack
             self.attack = self.iv_attack + self.stats['baseAttack']
+            self.attack *= self.cpm
 
         if defense is VAL.RANDOM:
             defense = random.randint(0, 15)
         if defense is not VAL.DONT_SET:
             self.iv_defense = defense
             self.defense = self.iv_defense + self.stats['baseDefense']
+            self.defense *= self.cpm
 
         if stamina is VAL.RANDOM:
             stamina = random.randint(0, 15)
         if stamina is not VAL.DONT_SET:
             self.iv_stamina = stamina
             self.stamina = self.iv_stamina + self.stats['baseStamina']
+            self.stamina *= self.cpm
 
         # A move's stats depend on its pokemon, so set the pokemon stats before setting its moves.
         if fast is VAL.RANDOM:
@@ -147,12 +150,21 @@ class Pokemon():
         if charged is not VAL.DONT_SET:
             self.charged = [Move(self, x) for x in charged]
 
+    def cp(self):
+        # CP = (Attack * Defense^0.5 * Stamina^0.5 * CP_Multiplier^2) / 10
+        # https://gamepress.gg/pokemongo/pokemon-stats-advanced#cp-multiplier
+        rv = self.attack
+        rv *= pow(self.defense, 0.5)
+        rv *= pow(self.stamina, 0.5)
+        return rv / 10
+
     def __str__(self):
         """Return a human-readable string representation of the pokemon."""
         iv_str = "{0:d}/{1:d}/{2:d}".format(self.iv_attack, self.iv_defense, self.iv_stamina)
         type_str = "/".join(sorted([str(x) for x in self.type]))
         moves_str = str(self.fast) + " " + "+".join([str(x) for x in self.charged])
-        return f"{self.name:s} ({type_str:s}) {iv_str:s} {self.level:0.1f} {moves_str:s}"
+        cp = self.cp()
+        return f"{self.name:s} ({type_str:s}) {iv_str:s} {self.level:0.1f} {moves_str:s} CP={cp:0.1f}"
 
     def __eq__(self, b):
         """Return whether we're comparing two identical pokemon."""
@@ -204,6 +216,12 @@ class PokemonUnitTest(unittest.TestCase):
             pokey.update(name=random.choice(names))
             count += 1
         logging.info("Updated %0.0f pokemon/s", count / self._time)
+
+    def test_cp(self):
+        """Test that we can compute CP correctly."""
+        self.assertEqual(4115, int(Pokemon(self.gm, "KYOGRE", attack=15, defense=15, stamina=15, level=40).cp()))
+        self.assertEqual(3741, int(Pokemon(self.gm, "DIALGA", attack=15, defense=15, stamina=14, level=35).cp()))
+        self.assertEqual(394, int(Pokemon(self.gm, "SEEL", attack=2, defense=1, stamina=0, level=18).cp()))
 
 
 if __name__ == "__main__":
