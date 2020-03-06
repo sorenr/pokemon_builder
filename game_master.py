@@ -237,6 +237,22 @@ class GameMaster():
         # re-index effectiveness by enum index
         self.effectiveness = {t.value: self.effectiveness[t.name] for t in [Types(x) for x in TYPE_LIST]}
 
+        # precompute the cp multiplier table for half-levels
+        cp_i = self._cp_multiplier[0]
+        cpm_table = [cp_i]
+        for i in range(1, len(self._cp_multiplier)):
+            half_cp = pow(cp_i, 2)
+            cp_i = self._cp_multiplier[i]
+            half_cp += pow(cp_i, 2)
+            half_cp = pow(0.5 * half_cp, 0.5)
+            cpm_table.extend([half_cp, cp_i])
+        self._cp_multiplier = tuple(cpm_table)
+
+    def cp_multiplier(self, level):
+        """Return the CP multiplier for levels [0.0 .. 40.0]"""
+        i = round(2 * level) - 2
+        return self._cp_multiplier[i]
+
     def effect(self, attack_type, target_types):
         effect = 1.0
         for ttype in target_types:
@@ -278,6 +294,19 @@ class GameMasterUnitTest(unittest.TestCase):
             pcharged = self.gm.possible_charged(name)
             self.assertGreaterEqual(len(pfast), 1)
             self.assertGreaterEqual(len(pcharged), 1)
+
+    def test_cp_mult(self):
+        """Compute correct cp_multiplier values."""
+        for level, val in (
+                (1.0, 0.094),
+                (1.5, 0.1351374318),
+                (10.0, 0.4225),
+                (10.5, 0.4329264091),
+                (20.0, 0.5974),
+                (20.5, 0.6048236651),
+                (40.0, 0.7903),
+                (41.0, 0.79530001)):
+            self.assertAlmostEqual(self.gm.cp_multiplier(level), val)
 
 
 if __name__ == "__main__":
