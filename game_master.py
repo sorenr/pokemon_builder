@@ -36,6 +36,7 @@ class GameMaster():
     _re_pokemon = re.compile(r'V(\d+)_POKEMON_(.+)')
     _re_forms = re.compile(r'FORMS_V(\d+)_POKEMON_(.+)')
     _re_move = re.compile(r'V(\d+)_MOVE_(.+)')
+    _re_combat_move = re.compile(r'COMBAT_V(\d+)_MOVE_(.+)')
 
     K_FAST = "quickMoves"
     K_CHARGED = "cinematicMoves"
@@ -52,7 +53,6 @@ class GameMaster():
         'bundle.',
         'camera_',
         'CHARACTER_',
-        'COMBAT_',
         'ENCOUNTER_',
         'EX_RAID_',
         'FRIENDSHIP_LEVEL_',
@@ -115,6 +115,7 @@ class GameMaster():
         self.pokemon = {}        # pokemon[monster_name] = monster_data
         self.forms = {}          # forms[form_name] = alt_forms
         self.moves = {}          # moves[move_name] = move_data
+        self.moves_combat = {}   # moves_combat[move_name] = move_data
         self._cp_multiplier = None
 
         """Reconfigure the data to be more useful."""
@@ -170,7 +171,17 @@ class GameMaster():
             if r:
                 settings = item.get('move') or item.get('moveSettings')
                 name = settings['movementId']
+                assert name not in self.moves
                 self.moves[name] = settings
+                continue
+
+            # store combat (pvp) move settings
+            r = self._re_combat_move.match(tid)
+            if r:
+                settings = item['combatMove']
+                name = r.group(2)
+                assert name not in self.moves_combat
+                self.moves_combat[name] = settings
                 continue
 
             # warn about a possibly important item we're ignoring
