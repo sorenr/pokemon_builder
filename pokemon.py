@@ -5,6 +5,7 @@ import argparse
 import random
 import unittest
 import enum
+import time
 
 import game_master
 
@@ -156,6 +157,7 @@ class Pokemon():
 
 class PokemonUnitTest(unittest.TestCase):
     gm = None
+    _time = 0.5
 
     def setUp(self):
         if not PokemonUnitTest.gm:
@@ -166,6 +168,24 @@ class PokemonUnitTest(unittest.TestCase):
         logging.info("3 random monsters:")
         for i in range(3):
             logging.info("%d: %s", i, str(Pokemon(self.gm)))
+
+    def test_create_speed(self):
+        end = time.time() + self._time
+        count = 0
+        while end > time.time():
+            Pokemon(self.gm)
+            count += 1
+        logging.info("Created %0.0f pokemon/s", count / self._time)
+
+    def test_update_speed(self):
+        end = time.time() + self._time
+        count = 0
+        pokey = Pokemon(self.gm)
+        names = list(self.gm.pokemon.keys())
+        while end > time.time():
+            pokey.update(name=random.choice(names))
+            count += 1
+        logging.info("Updated %0.0f pokemon/s", count / self._time)
 
 
 if __name__ == "__main__":
