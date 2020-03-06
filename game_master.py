@@ -8,6 +8,7 @@ import logging
 import urllib.request
 import subprocess
 import unittest
+import enum
 
 
 """
@@ -27,6 +28,39 @@ def get_http(url, dest):
 def get_curl(url, dest):
     """Retrieve a file via curl"""
     subprocess.run(["curl", GAME_MASTER_URL, "-o", GAME_MASTER_PATH], check=True)
+
+
+class Types(enum.Enum):
+    """Index order of POKEMON_TYPE_* effectiveness in GAME_MASTER"""
+    POKEMON_TYPE_NORMAL = 0
+    POKEMON_TYPE_FIGHTING = 1
+    POKEMON_TYPE_FLYING = 2
+    POKEMON_TYPE_POISON = 3
+    POKEMON_TYPE_GROUND = 4
+    POKEMON_TYPE_ROCK = 5
+    POKEMON_TYPE_BUG = 6
+    POKEMON_TYPE_GHOST = 7
+    POKEMON_TYPE_STEEL = 8
+    POKEMON_TYPE_FIRE = 9
+    POKEMON_TYPE_WATER = 10
+    POKEMON_TYPE_GRASS = 11
+    POKEMON_TYPE_ELECTRIC = 12
+    POKEMON_TYPE_PSYCHIC = 13
+    POKEMON_TYPE_ICE = 14
+    POKEMON_TYPE_DRAGON = 15
+    POKEMON_TYPE_DARK = 16
+    POKEMON_TYPE_FAIRY = 17
+
+    def __lt__(self, other):
+        if isinstance(other, Types):
+            return self.name < other.name
+        return self.value < int(other.value)
+
+    def __str__(self):
+        return self.name[13:]
+
+
+TYPE_LIST = sorted(list(Types), key=lambda t: t.value)
 
 
 class GameMaster():
@@ -199,6 +233,9 @@ class GameMaster():
         assert GameMaster.K_CHARGED not in self.pokemon[GameMaster.K_SMEARGLE]
         self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_FAST] = smeargle_moves[GameMaster.K_FAST]
         self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_CHARGED] = smeargle_moves[GameMaster.K_CHARGED]
+
+        # re-index effectiveness by enum index
+        self.effectiveness = {t.value: self.effectiveness[t.name] for t in [Types(x) for x in TYPE_LIST]}
 
     def effect(self, attack_type, target_types):
         effect = 1.0
