@@ -234,6 +234,14 @@ class GameMasterUnitTest(unittest.TestCase):
     def test_report(self):
         self.gm.report()
 
+    def test_attack_num(self):
+        """Make sure all pokemon have at least one fast and one charged attack."""
+        for name in self.gm.pokemon.keys():
+            pfast = self.gm.possible_fast(name)
+            pcharged = self.gm.possible_charged(name)
+            self.assertGreaterEqual(len(pfast), 1)
+            self.assertGreaterEqual(len(pcharged), 1)
+
 
 if __name__ == "__main__":
     import argparse
