@@ -54,6 +54,21 @@ class Move():
         else:
             self.stab = 1
 
+    def damage(self, target):
+        """Calculate damage dealt to the target."""
+        if not self.power:
+            return 1
+        attack = self.pokemon.attack * self.bonus_atk
+        if self.pokemon.is_purified and target.is_shadow:
+            attack *= self.pokemon.settings.get('purifiedPokemonAttackMultiplierVsShadow', 1)
+        attack *= self.pokemon.gm.buff_multiplier_attack[self.pokemon.buff_attack]
+
+        defense = target.defense * target.bonus_def
+        defense *= target.gm.buff_multiplier_defense[target.buff_defense]
+
+        effective = self.gm.effect(self.type, target.type)
+        return 1 + int(0.5 * self.power * attack / defense * self.stab * effective)
+
     def __str__(self):
         """Return the attack name, minus the suffix."""
         if self.name.endswith(self._FSUFFIX):
@@ -177,6 +192,8 @@ class Pokemon():
         self.defense = (self.iv_defense + self.stats['baseDefense']) * self.cpm
         self.stamina = (self.iv_stamina + self.stats['baseStamina']) * self.cpm
 
+        self.defense *= self.settings.get(self.gm.K_BONUS_DEF, 1)
+
         # A move's stats depend on its pokemon, so set the pokemon stats before setting its moves.
         if fast is VAL.RANDOM:
             fast = random.choice(self.possible_fast)
@@ -193,6 +210,9 @@ class Pokemon():
         if charged is not VAL.DONT_SET:
             self.charged = [Move(self, x) for x in charged]
 
+        # reset to default combat values
+        self.reset()
+
     def cp(self):
         # CP = (Attack * Defense^0.5 * Stamina^0.5 * CP_Multiplier^2) / 10
         # https://gamepress.gg/pokemongo/pokemon-stats-advanced#cp-multiplier
@@ -200,6 +220,11 @@ class Pokemon():
         rv *= pow(self.defense, 0.5)
         rv *= pow(self.stamina, 0.5)
         return rv / 10
+
+    def reset(self):
+        """Reset attack/defense/stamina after combat."""
+        self.buff_attack = 4
+        self.buff_defense = 4
 
     def __str__(self):
         """Return a human-readable string representation of the pokemon."""
@@ -350,6 +375,20 @@ class PokemonUnitTest(unittest.TestCase):
         self.assertEqual(3, cache["bar"]["taco"])
         del cache
         os.unlink(TEST_FILE)
+
+    def test_damage(self):
+        """Test that we can compute damage correctly."""
+        ctx = CONTEXT.COMBAT
+        kyogre = Pokemon(self.gm, "KYOGRE", level=40,
+                         attack=15, defense=15, stamina=15,
+                         fast="WATERFALL_FAST", charged=["SURF"],
+                         context=ctx)
+        groudon = Pokemon(self.gm, "GROUDON", level=40,
+                          attack=15, defense=15, stamina=15,
+                          fast="MUD_SHOT_FAST", charged=["EARTHQUAKE"],
+                          context=ctx)
+        self.assertEqual(18, kyogre.fast.damage(groudon))
+        self.assertEqual(3, groudon.fast.damage(kyogre))
 
 
 if __name__ == "__main__":
