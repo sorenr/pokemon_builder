@@ -6,6 +6,8 @@ import random
 import unittest
 import enum
 import time
+import json
+import os
 
 import game_master
 
@@ -45,6 +47,27 @@ class Move():
         if self.name.endswith(self._FSUFFIX):
             return self.name[:-self._FL]
         return self.name
+
+
+class Cache(dict):
+    """A dict which persists."""
+    def __init__(self, path):
+        self.path = path
+        try:
+            with open(path) as fd:
+                self.update(json.loads(fd.read()))
+            logging.info("Loaded cache from %s", self.path)
+        except FileNotFoundError:
+            pass
+
+    def write(self, newpath=None):
+        """Write the cache before we exit."""
+        if not newpath:
+            newpath = self.path
+        with open(newpath, 'w') as fd:
+            json.dump(self, fd)
+        logging.info("Wrote cache to %s", self.path)
+        return newpath
 
 
 class Pokemon():
@@ -278,6 +301,29 @@ class PokemonUnitTest(unittest.TestCase):
         self.assertEqual(2153046, Pokemon(self.gm, "SKARMORY", attack=0, defense=15, stamina=14, level=27.5).stat_product(full_precision=False))
         # https://gostadium.club/pvp/iv?pokemon=Rattata&max_cp=1500&min_iv=0&att_iv=15&def_iv=15&sta_iv=15
         self.assertEqual(576332, Pokemon(self.gm, "RATTATA", attack=15, defense=15, stamina=15, level=40).stat_product(full_precision=False))
+
+    def test_cache(self):
+        TEST_FILE = "tmp.json"
+        # make a new cache
+        cache = Cache(TEST_FILE)
+        # store the values
+        cache.update({"foo": 1})
+        cache.update({"bar": {"baz": 2}})
+        cache["bar"]["taco"] = 3
+        # verify that we've stored them correctly
+        self.assertEqual(1, cache["foo"])
+        self.assertEqual(2, cache["bar"]["baz"])
+        self.assertEqual(3, cache["bar"]["taco"])
+        # make a new cache
+        cache.write()
+        del cache
+        cache = Cache(TEST_FILE)
+        # verify that the values are still there
+        self.assertEqual(1, cache["foo"])
+        self.assertEqual(2, cache["bar"]["baz"])
+        self.assertEqual(3, cache["bar"]["taco"])
+        del cache
+        os.unlink(TEST_FILE)
 
 
 if __name__ == "__main__":
