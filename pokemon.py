@@ -184,6 +184,45 @@ class Pokemon():
             sp *= int(self.stamina)
             return int(sp + 0.5)  # round to the nearest int
 
+    def optimize_iv(self, max_cp=None):
+        """Optimize the IV stat product & level for a given CP cap."""
+        # return max CP if we have no limit, or max IV is below the cap
+        self.update(attack=15, defense=15, stamina=15, level=41)
+        cp = self.cp()
+        if max_cp is None or cp <= max_cp:
+            logging.debug("15/15/15/41=%d, under the %d IV cap", cp, max_cp)
+            return [15, 15, 15, 40, self.cp(), self.stat_product(full_precision=True)]
+
+        # return False if the minimum IV is above the limit
+        self.update(attack=0, defense=0, stamina=0, level=1)
+        cp = self.cp()
+        sp = None
+        optimal = []
+        if cp > max_cp:
+            logging.debug("0/0/0/1=%d exceeds the %d IV cap", cp, max_cp)
+            return False
+        # find the optimal IV/level combination
+        for a in range(0, 16):
+            for d in range(0, 16):
+                for s in range(0, 16):
+                    for l in [x * 0.5 for x in range(2, 82)]:
+                        self.update(attack=a, defense=d, stamina=s, level=l)
+                        t_cp = self.cp()
+                        if t_cp > max_cp:
+                            break
+                        t_sp = self.stat_product(full_precision=True)
+                        if sp is None or t_sp > sp:
+                            sp = t_sp
+                            optimal = [(a, d, s, l, t_cp, t_sp)]
+                        elif t_sp == sp:
+                            optimal.append((a, d, s, l, t_cp, t_sp))
+        # update the stats with the optimal values
+        if optimal:
+            o = optimal[0]
+            self.update(attack=o[0], defense=o[1], stamina=o[2], level=o[3])
+            return o
+        return False
+
 
 class PokemonUnitTest(unittest.TestCase):
     gm = None
