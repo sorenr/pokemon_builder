@@ -154,6 +154,14 @@ class Pokemon():
         moves_str = str(self.fast) + " " + "+".join([str(x) for x in self.charged])
         return f"{self.name:s} ({type_str:s}) {iv_str:s} {self.level:0.1f} {moves_str:s}"
 
+    def __eq__(self, b):
+        """Return whether we're comparing two identical pokemon."""
+        return (self.name == b.name and
+                self.iv_attack == b.iv_attack and
+                self.iv_defense == b.iv_defense and
+                self.iv_stamina == b.iv_stamina and
+                self.level == b.level)
+
 
 class PokemonUnitTest(unittest.TestCase):
     gm = None
@@ -168,6 +176,16 @@ class PokemonUnitTest(unittest.TestCase):
         logging.info("3 random monsters:")
         for i in range(3):
             logging.info("%d: %s", i, str(Pokemon(self.gm)))
+
+    def test_eqivalence(self):
+        """Test the equivalence operator."""
+        kyogreA = Pokemon(self.gm, "KYOGRE", attack=15, defense=15, stamina=15, level=40)
+        kyogreB = Pokemon(self.gm, "KYOGRE", attack=15, defense=10, stamina=15, level=40)
+        self.assertNotEqual(kyogreA, kyogreB)
+        kyogreB.update(defense=15)
+        self.assertEqual(kyogreA, kyogreB)
+        kyogreB.update(level=39)
+        self.assertNotEqual(kyogreA, kyogreB)
 
     def test_create_speed(self):
         end = time.time() + self._time
