@@ -40,6 +40,8 @@ class GameMaster():
 
     K_FAST = "quickMoves"
     K_CHARGED = "cinematicMoves"
+    K_SMEARGLE = "SMEARGLE"
+    K_SMEARGLE_MOVES = "SMEARGLE_MOVES_SETTINGS"
 
     # item prefixes to ignore
     _TID_IGNORE = [
@@ -135,6 +137,11 @@ class GameMaster():
                 self._cp_multiplier = item['playerLevel']['cpMultiplier']
                 continue
 
+            # save smeargle's moves for processing at the end of this loop
+            if tid == "SMEARGLE_MOVES_SETTINGS":
+                smeargle_moves = item['smeargleMovesSettings']
+                continue
+
             # add forms to self.forms
             r = self._re_forms.match(tid)
             if r:
@@ -186,6 +193,12 @@ class GameMaster():
 
             # warn about a possibly important item we're ignoring
             # logging.debug("Won't process %s", tid)
+
+        # Add Smeargle's moves
+        assert GameMaster.K_FAST not in self.pokemon[GameMaster.K_SMEARGLE]
+        assert GameMaster.K_CHARGED not in self.pokemon[GameMaster.K_SMEARGLE]
+        self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_FAST] = smeargle_moves[GameMaster.K_FAST]
+        self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_CHARGED] = smeargle_moves[GameMaster.K_CHARGED]
 
     def effect(self, attack_type, target_types):
         effect = 1.0
