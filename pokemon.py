@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+
+import logging
+import argparse
+import random
+import unittest
+import enum
+
+import game_master
+
+
+class VAL(enum.Enum):
+    """Actions for setting pokemon attributes."""
+    DONT_SET = enum.auto()  # don't do anything
+    RANDOM = enum.auto()    # set a random value
+    OPTIMAL = enum.auto()   # set an optimal value
+
+
+class CONTEXT(enum.Enum):
+    """Contexts for evaluating an interaction"""
+    BATTLE = enum.auto()  # raid
+    COMBAT = enum.auto()  # pvp
+
+
+class Move():
+    """Attack move representation"""
+
+    _FSUFFIX = "_FAST"
+    _FL = len(_FSUFFIX)
+
+    def __init__(self, pokemon, name):
+        self.pokemon = pokemon
+        self.gm = self.pokemon.gm
+        self.update(name)
+
+    def update(self, name):
+        """Set the attack name and the data depending on that name."""
+        self.name = name
+        self.data = self.pokemon.moves[self.name]
+        self.type = game_master.Types[self.data['type']]
+
+    def __str__(self):
+        """Return the attack name, minus the suffix."""
+        if self.name.endswith(self._FSUFFIX):
+            return self.name[:-self._FL]
+        return self.name
+
+
+class Pokemon():
+    """Full representation of a specific Pokemon: type, IVs, attacks."""
+
+    fast = None
+    charged = []
+
+    def __init__(self, gm,
+                 name=VAL.RANDOM,
+                 attack=VAL.RANDOM,
+                 defense=VAL.RANDOM,
+                 stamina=VAL.RANDOM,
+                 level=VAL.RANDOM,
+                 fast=VAL.RANDOM,
+                 charged=VAL.RANDOM,
+                 context=CONTEXT.COMBAT):
+        self.gm = gm
+        self.update(name=name, attack=attack, defense=defense,
+                    stamina=stamina, level=level,
+                    fast=fast, charged=charged,
+                    context=context)
+
+    def update(self,
+               name=VAL.DONT_SET,
+               attack=VAL.DONT_SET,
+               defense=VAL.DONT_SET,
+               stamina=VAL.DONT_SET,
+               level=VAL.DONT_SET,
+               fast=VAL.DONT_SET,
+               charged=VAL.DONT_SET,
+               context=VAL.DONT_SET):
+        """Set or randomize values if requested."""
+
+        # everything depends on context, so set context first
+        if context is not VAL.DONT_SET:
+            self.context = context
+            if self.context == CONTEXT.COMBAT:
+                self.moves = self.gm.moves_combat
+                self.settings = self.gm.settings_combat
+            elif self.context == CONTEXT.BATTLE:
+                self.moves = self.gm.moves_battle
+                self.settings = self.gm.settings_battle
+
+        if name is VAL.RANDOM:
+            name = random.choice(list(self.gm.pokemon.keys()))
+        if name is not VAL.DONT_SET:
+            self.name = name
+            self.data = self.gm.pokemon[self.name]
+            self.stats = self.data['stats']
+            self.type = {self.data['type1'], self.data.get('type2')}
+            self.type = {game_master.Types[x] for x in self.type if x is not None}
+            self.possible_fast = self.gm.possible_fast(name)
+            self.possible_charged = self.gm.possible_charged(name)
+
+            # we can't keep our moves if they're not legal moves
+            if fast is VAL.DONT_SET and self.fast not in self.possible_fast:
+                fast = VAL.RANDOM
+            self.charged = [x for x in self.charged if x in self.possible_charged]
+            if charged is VAL.DONT_SET and not self.charged:
+                charged = VAL.RANDOM
+
+        if level is VAL.RANDOM:
+            level = 0.5 * random.randint(2, 82)
+        if level is not VAL.DONT_SET:
+            self.level = level
+            self.cpm = self.gm.cp_multiplier(self.level)
+
+        if attack is VAL.RANDOM:
+            attack = random.randint(0, 15)
+        if attack is not VAL.DONT_SET:
+            self.iv_attack = attack
+            self.attack = self.iv_attack + self.stats['baseAttack']
+
+        if defense is VAL.RANDOM:
+            defense = random.randint(0, 15)
+        if defense is not VAL.DONT_SET:
+            self.iv_defense = defense
+            self.defense = self.iv_defense + self.stats['baseDefense']
+
+        if stamina is VAL.RANDOM:
+            stamina = random.randint(0, 15)
+        if stamina is not VAL.DONT_SET:
+            self.iv_stamina = stamina
+            self.stamina = self.iv_stamina + self.stats['baseStamina']
+
+        # A move's stats depend on its pokemon, so set the pokemon stats before setting its moves.
+        if fast is VAL.RANDOM:
+            fast = random.choice(self.possible_fast)
+        if fast is not VAL.DONT_SET:
+            self.fast = Move(self, fast)
+
+        if charged is VAL.RANDOM:
+            # pick 1 or 2 charged attacks
+            p_charged = self.possible_charged.copy()
+            charged = [random.choice(p_charged)]
+            if len(p_charged) > 1 and random.random() > 0.5:
+                p_charged.remove(charged[0])
+                charged.append(random.choice(p_charged))
+        if charged is not VAL.DONT_SET:
+            self.charged = [Move(self, x) for x in charged]
+
+    def __str__(self):
+        """Return a human-readable string representation of the pokemon."""
+        iv_str = "{0:d}/{1:d}/{2:d}".format(self.iv_attack, self.iv_defense, self.iv_stamina)
+        type_str = "/".join(sorted([str(x) for x in self.type]))
+        moves_str = str(self.fast) + " " + "+".join([str(x) for x in self.charged])
+        return f"{self.name:s} ({type_str:s}) {iv_str:s} {self.level:0.1f} {moves_str:s}"
+
+
+class PokemonUnitTest(unittest.TestCase):
+    gm = None
+
+    def setUp(self):
+        if not PokemonUnitTest.gm:
+            PokemonUnitTest.gm = game_master.GameMaster()
+
+    def test_random_create(self):
+        """Create three random monsters."""
+        logging.info("3 random monsters:")
+        for i in range(3):
+            logging.info("%d: %s", i, str(Pokemon(self.gm)))
+
+
+if __name__ == "__main__":
+    """Not intended for standalone use."""
+    parser = argparse.ArgumentParser(description='classes for pokemon analysis')
+    parser.add_argument("-v", dest="verbose", help="verbose output", action="store_true")
+    args = parser.parse_args()
+
+    if args.verbose:
+        log_level = logging.DEBUG
+        log_format = "%(levelname)-5s %(funcName)s:%(lineno)d > %(message)s\n"
+    else:
+        log_level = logging.INFO
+        log_format = "%(message)s"
+
+    logging.basicConfig(level=log_level, format=log_format)
+
+    unittest.main()
