@@ -6,6 +6,7 @@ import time
 import json
 import logging
 import urllib.request
+import subprocess
 import unittest
 
 
@@ -21,6 +22,11 @@ def get_http(url, dest):
     """Retrieve a file via http"""
     if not os.path.exists(dest):
         return urllib.request.urlretrieve(url, dest)
+
+
+def get_curl(url, dest):
+    """Retrieve a file via curl"""
+    subprocess.run(["curl", GAME_MASTER_URL, "-o", GAME_MASTER_PATH], check=True)
 
 
 class GameMaster():
@@ -79,7 +85,11 @@ class GameMaster():
         start = time.time()
         # fetch GAME_MASTER if it doesn't exist
         if not os.path.exists(GAME_MASTER_PATH):
-            get_http(GAME_MASTER_URL, GAME_MASTER_PATH)
+            try:
+                get_http(GAME_MASTER_URL, GAME_MASTER_PATH)
+            except urllib.request.URLError:
+                # sometimes Python's SSL certificates are missing
+                get_curl(GAME_MASTER_URL, GAME_MASTER_PATH)
             logging.info("Fetched %s from %s in %0.2fs", GAME_MASTER_PATH, GAME_MASTER_URL, time.time() - start)
         assert os.path.exists(GAME_MASTER_PATH)
 
