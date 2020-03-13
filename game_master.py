@@ -150,7 +150,7 @@ class GameMaster():
         self.effectiveness = {}  # type effectiveness
         self.pokemon = {}        # pokemon[monster_name] = monster_data
         self.forms = {}          # forms[form_name] = alt_forms
-        self.moves = {}          # moves[move_name] = move_data
+        self.moves_battle = {}   # moves_battle[move_name] = move_data
         self.moves_combat = {}   # moves_combat[move_name] = move_data
         self._cp_multiplier = None
 
@@ -175,6 +175,12 @@ class GameMaster():
             if tid == "SMEARGLE_MOVES_SETTINGS":
                 smeargle_moves = item['smeargleMovesSettings']
                 continue
+
+            if tid == "BATTLE_SETTINGS":
+                self.settings_battle = item['battleSettings']
+
+            if tid == "COMBAT_SETTINGS":
+                self.settings_combat = item['combatSettings']
 
             # add forms to self.forms
             r = self._re_forms.match(tid)
@@ -212,8 +218,8 @@ class GameMaster():
             if r:
                 settings = item.get('move') or item.get('moveSettings')
                 name = settings['movementId']
-                assert name not in self.moves
-                self.moves[name] = settings
+                assert name not in self.moves_battle
+                self.moves_battle[name] = settings
                 continue
 
             # store combat (pvp) move settings
@@ -233,6 +239,10 @@ class GameMaster():
         assert GameMaster.K_CHARGED not in self.pokemon[GameMaster.K_SMEARGLE]
         self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_FAST] = smeargle_moves[GameMaster.K_FAST]
         self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_CHARGED] = smeargle_moves[GameMaster.K_CHARGED]
+
+        # make "type" consistent between moves_combat and moves_battle
+        for v in self.moves_battle.values():
+            v['type'] = v['pokemonType']
 
         # re-index effectiveness by enum index
         self.effectiveness = {t.value: self.effectiveness[t.name] for t in [Types(x) for x in TYPE_LIST]}
@@ -274,7 +284,8 @@ class GameMaster():
         logging.info("EFFECTIVENESS %d", len(self.effectiveness))
         logging.info("POKEMON %d", len(self.pokemon))
         logging.info("FORMS %d", len(self.forms))
-        logging.info("MOVES %d", len(self.moves))
+        logging.info("B MOVES %d", len(self.moves_battle))
+        logging.info("C MOVES %d", len(self.moves_combat))
 
 
 class GameMasterUnitTest(unittest.TestCase):
