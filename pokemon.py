@@ -172,6 +172,18 @@ class Pokemon():
                 self.iv_stamina == b.iv_stamina and
                 self.level == b.level)
 
+    def stat_product(self, full_precision=False):
+        """Return the stat product, a useful metric for optimizing IVs."""
+        # https://gostadium.club/pvp/iv
+        # https://www.reddit.com/r/TheSilphRoad/comments/a4yb62/a_pvp_performance_calculator_featuring_calcy_iv
+        sp = self.attack * self.defense
+        if full_precision:
+            return sp * self.stamina
+        else:
+            # most online stat tables publish this number
+            sp *= int(self.stamina)
+            return int(sp + 0.5)  # round to the nearest int
+
 
 class PokemonUnitTest(unittest.TestCase):
     gm = None
@@ -220,6 +232,13 @@ class PokemonUnitTest(unittest.TestCase):
         self.assertEqual(4115, int(Pokemon(self.gm, "KYOGRE", attack=15, defense=15, stamina=15, level=40).cp()))
         self.assertEqual(3741, int(Pokemon(self.gm, "DIALGA", attack=15, defense=15, stamina=14, level=35).cp()))
         self.assertEqual(394, int(Pokemon(self.gm, "SEEL", attack=2, defense=1, stamina=0, level=18).cp()))
+
+    def test_stat_product(self):
+        """Test stat products vs pubished numbers. (low precision)"""
+        # https://gostadium.club/pvp/iv?pokemon=Skarmory&max_cp=1500&min_iv=0&att_iv=2&def_iv=12&sta_iv=12
+        self.assertEqual(2153046, Pokemon(self.gm, "SKARMORY", attack=0, defense=15, stamina=14, level=27.5).stat_product(full_precision=False))
+        # https://gostadium.club/pvp/iv?pokemon=Rattata&max_cp=1500&min_iv=0&att_iv=15&def_iv=15&sta_iv=15
+        self.assertEqual(576332, Pokemon(self.gm, "RATTATA", attack=15, defense=15, stamina=15, level=40).stat_product(full_precision=False))
 
 
 if __name__ == "__main__":
