@@ -191,6 +191,11 @@ class GameMaster():
             if tid == "COMBAT_SETTINGS":
                 self.settings_combat = item['combatSettings']
 
+            if tid == "COMBAT_STAT_STAGE_SETTINGS":
+                self.settings_combat_stat_stage = item['combatStatStageSettings']
+                self.buff_multiplier_attack = self.settings_combat_stat_stage['attackBuffMultiplier']
+                self.buff_multiplier_defense = self.settings_combat_stat_stage['defenseBuffMultiplier']
+
             # add forms to self.forms
             r = self._re_forms.match(tid)
             if r:
