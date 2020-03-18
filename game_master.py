@@ -77,6 +77,13 @@ class GameMaster():
     K_SMEARGLE = "SMEARGLE"
     K_SMEARGLE_MOVES = "SMEARGLE_MOVES_SETTINGS"
 
+    K_BONUS_DEF = "defenseBonusMultiplier"
+
+    K_SHADOW_SUFFIX = "_SHADOW"
+    K_SHADOW_BONUS_DEF = "shadowPokemonDefenseBonusMultiplier"
+    K_SHADOW_BONUS_ATK = "shadowPokemonAttackBonusMultiplier"
+    K_PURIFIED_SUFFIX = "_PURIFIED"
+
     # item prefixes to ignore
     _TID_IGNORE = [
         'adventure_',
