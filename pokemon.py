@@ -42,6 +42,18 @@ class Move():
         self.data = self.pokemon.moves[self.name]
         self.type = game_master.Types[self.data['type']]
 
+        # set attack bonus based on fast/charged
+        if self.name.endswith(Move._FSUFFIX):
+            self.bonus_atk = self.pokemon.settings.get('fastAttackBonusMultiplier', 1)
+        else:
+            self.bonus_atk = self.pokemon.settings.get('chargeAttackBonusMultiplier', 1)
+
+        self.power = self.data.get('power', 0)
+        if self.type in self.pokemon.type:
+            self.stab = self.pokemon.settings['sameTypeAttackBonusMultiplier']
+        else:
+            self.stab = 1
+
     def __str__(self):
         """Return the attack name, minus the suffix."""
         if self.name.endswith(self._FSUFFIX):
@@ -129,6 +141,16 @@ class Pokemon():
             self.charged = [x for x in self.charged if x in self.possible_charged]
             if charged is VAL.DONT_SET and not self.charged:
                 charged = VAL.RANDOM
+
+        self.is_shadow = self.name.endswith(self.gm.K_SHADOW_SUFFIX)
+        self.is_purified = self.name.endswith(self.gm.K_PURIFIED_SUFFIX)
+
+        self.bonus_atk = 1
+        self.bonus_def = self.settings.get(self.gm.K_BONUS_DEF, 1)
+
+        if self.is_shadow:
+            self.bonus_atk *= self.settings[self.gm.K_SHADOW_BONUS_ATK]
+            self.bonus_def *= self.settings[self.gm.K_SHADOW_BONUS_DEF]
 
         if level is VAL.RANDOM:
             level = 0.5 * random.randint(2, 82)
@@ -294,6 +316,10 @@ class PokemonUnitTest(unittest.TestCase):
         self.assertEqual(4115, int(Pokemon(self.gm, "KYOGRE", attack=15, defense=15, stamina=15, level=40).cp()))
         self.assertEqual(3741, int(Pokemon(self.gm, "DIALGA", attack=15, defense=15, stamina=14, level=35).cp()))
         self.assertEqual(394, int(Pokemon(self.gm, "SEEL", attack=2, defense=1, stamina=0, level=18).cp()))
+        self.assertEqual(92, int(Pokemon(self.gm, "RALTS_SHADOW", attack=0, defense=4, stamina=10, level=8).cp()))
+        self.assertEqual(221, int(Pokemon(self.gm, "VENONAT_SHADOW", attack=15, defense=13, stamina=11, level=8).cp()))
+        self.assertEqual(256, int(Pokemon(self.gm, "MEOWTH_SHADOW", attack=10, defense=9, stamina=15, level=13).cp()))
+        self.assertEqual(1227, int(Pokemon(self.gm, "MOLTRES_SHADOW", attack=5, defense=14, stamina=12, level=13).cp()))
 
     def test_stat_product(self):
         """Test stat products vs pubished numbers. (low precision)"""
