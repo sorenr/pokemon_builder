@@ -25,6 +25,11 @@ class CONTEXT(enum.Enum):
     COMBAT = enum.auto()  # pvp
 
 
+def clamp(val, vmin, vmax):
+    """Clamp val between vmin and vmax"""
+    return max(vmin, min(vmax, val))
+
+
 class Move():
     """Attack move representation"""
 
@@ -40,10 +45,14 @@ class Move():
         """Set the attack name and the data depending on that name."""
         self.name = name
         self.data = self.pokemon.moves[self.name]
+        self.buffs = self.data.get("buffs")
+        self.cooldown = self.data.get('durationTurns', 0)
+        self.energy_delta = self.data.get('energyDelta', 0)
         self.type = game_master.Types[self.data['type']]
 
         # set attack bonus based on fast/charged
-        if self.name.endswith(Move._FSUFFIX):
+        self.is_fast = self.name.endswith(Move._FSUFFIX)
+        if self.is_fast:
             self.bonus_atk = self.pokemon.settings.get('fastAttackBonusMultiplier', 1)
         else:
             self.bonus_atk = self.pokemon.settings.get('chargeAttackBonusMultiplier', 1)
@@ -68,6 +77,44 @@ class Move():
 
         effective = self.gm.effect(self.type, target.type)
         return 1 + int(0.5 * self.power * attack / defense * self.stab * effective)
+
+    def attack(self, target, damage=None, shield=True):
+        """Attack the target, compute results including buffs."""
+        # record the target's old stats
+        hp_old = target.hp
+        energy_old = self.pokemon.energy
+
+        # compute damage if it wasn't precomputed
+        if damage is None:
+            damage = self.damage(target)
+
+        # if it's a charged attack
+        if not self.is_fast:
+            # damage is 1 when shielding
+            if shield and target.shields > 0:
+                target.shields -= 1
+                damage = 1
+            target.cooldown += 2
+
+        # apply the attack damage
+        target.hp -= damage
+        self.pokemon.energy += self.energy_delta
+        self.pokemon.cooldown -= self.cooldown
+        logging.debug("%s-%s->%s dmg=%d hp=%0.1f->%0.1f en=%0.1f->%0.1f",
+                      self.pokemon.name, self.name, target.name, damage,
+                      hp_old, target.hp, energy_old, self.pokemon.energy)
+
+        # apply attack buffs
+        # FIXME: add expected value for lower-probability buffs
+        if self.buffs and self.buffs['buffActivationChance'] >= 1.0:
+            self.pokemon.buff_attack += self.buffs.get('attackerAttackStatStageChange', 0)
+            self.pokemon.buff_attack = clamp(self.pokemon.buff_attack, 0, len(self.pokemon.gm.buff_multiplier_attack) - 1)
+            self.pokemon.buff_defense += self.buffs.get('attackerDefenseStatStageChange', 0)
+            self.pokemon.buff_defense = clamp(self.pokemon.buff_defense, 0, len(self.pokemon.gm.buff_multiplier_defense) - 1)
+            target.buff_attack += self.buffs.get('targetAttackStatStageChange', 0)
+            target.buff_attack = clamp(target.buff_attack, 0, len(target.gm.buff_multiplier_attack) - 1)
+            target.buff_defense += self.buffs.get('targetDefenseStatStageChange', 0)
+            target.buff_defense = clamp(target.buff_defense, 0, len(target.gm.buff_multiplier_defense) - 1)
 
     def __str__(self):
         """Return the attack name, minus the suffix."""
@@ -221,10 +268,14 @@ class Pokemon():
         rv *= pow(self.stamina, 0.5)
         return rv / 10
 
-    def reset(self):
+    def reset(self, shields=1):
         """Reset attack/defense/stamina after combat."""
+        self.hp = self.stamina
+        self.shields = shields
         self.buff_attack = 4
         self.buff_defense = 4
+        self.cooldown = 0
+        self.energy = 0
 
     def __str__(self):
         """Return a human-readable string representation of the pokemon."""
