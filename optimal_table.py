@@ -10,10 +10,6 @@ import pokemon
 """Precompute a JSON table of optimal PvP IVs."""
 
 
-# default path for the optimal PVP table
-OPTIMAL_IV = "OPTIMAL_IV.json"
-
-
 def find_optimal_proc(name):
     """Worker process to compute optimal IVs for 1500 and 2500 cp"""
     p = pokemon.Pokemon(GM, name=name)
@@ -25,7 +21,7 @@ def find_optimal_proc(name):
     return optimal
 
 
-def find_optimal_multi(out=OPTIMAL_IV):
+def find_optimal_multi(out=pokemon.OPTIMAL_IV):
     """Coordinating process to run find_optimal_proc across multiple procs"""
     optimal = pokemon.Cache(out)
     # Find which pokemon are not in the list
