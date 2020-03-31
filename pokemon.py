@@ -12,6 +12,10 @@ import os
 import game_master
 
 
+# default path for the optimal PVP table
+OPTIMAL_IV = "OPTIMAL_IV.json"
+
+
 class VAL(enum.Enum):
     """Actions for setting pokemon attributes."""
     DONT_SET = enum.auto()  # don't do anything
@@ -130,7 +134,7 @@ class Cache(dict):
         try:
             with open(path) as fd:
                 self.update(json.loads(fd.read()))
-            logging.info("Loaded cache from %s", self.path)
+            logging.debug("Loaded %d entries from %s", len(self), self.path)
         except FileNotFoundError:
             pass
 
@@ -140,7 +144,7 @@ class Cache(dict):
             newpath = self.path
         with open(newpath, 'w') as fd:
             json.dump(self, fd)
-        logging.info("Wrote cache to %s", self.path)
+        logging.debug("Wrote %d entries to %s", len(self), self.path)
         return newpath
 
 
@@ -149,6 +153,7 @@ class Pokemon():
 
     fast = None
     charged = []
+    iv_cache = None
 
     def __init__(self, gm,
                  name=VAL.RANDOM,
@@ -305,14 +310,37 @@ class Pokemon():
             sp *= int(self.stamina)
             return int(sp + 0.5)  # round to the nearest int
 
-    def optimize_iv(self, max_cp=None):
+    def write_iv_cache(self):
+        """Write the IV cache if we've dirtied it."""
+        if self.iv_cache_dirty:
+            self.iv_cache.write()
+
+    def optimize_iv(self, max_cp=None, iv_cache=OPTIMAL_IV):
         """Optimize the IV stat product & level for a given CP cap."""
+        # static cache for all instances of a pokemon
+        if Pokemon.iv_cache is None:
+            Pokemon.iv_cache = Cache(iv_cache)
+            self.iv_cache_dirty = False
+            if Pokemon.iv_cache:
+                logging.info("opened cache %s with %d entries", iv_cache, len(Pokemon.iv_cache))
+
+        o = Pokemon.iv_cache.get(self.name, {}).get(str(max_cp))
+        if o is not None:
+            # update to the optimal cached stats
+            self.update(attack=o[0], defense=o[1], stamina=o[2], level=o[3])
+            # return the cached value
+            return o
+
         # return max CP if we have no limit, or max IV is below the cap
         self.update(attack=15, defense=15, stamina=15, level=41)
         cp = self.cp()
         if max_cp is None or cp <= max_cp:
-            logging.debug("15/15/15/41=%d, under the %d IV cap", cp, max_cp)
-            return [15, 15, 15, 40, self.cp(), self.stat_product(full_precision=True)]
+            max_cp_s = max_cp is None and "INF" or str(max_cp)
+            logging.debug("15/15/15/41=%d, under the %s IV cap", cp, max_cp_s)
+            o = [15, 15, 15, 41, self.cp(), self.stat_product(full_precision=True)]
+            Pokemon.iv_cache.setdefault(self.name, {})[max_cp] = o
+            self.iv_cache_dirty = True
+            return o
 
         # return False if the minimum IV is above the limit
         self.update(attack=0, defense=0, stamina=0, level=1)
@@ -321,6 +349,8 @@ class Pokemon():
         optimal = []
         if cp > max_cp:
             logging.debug("0/0/0/1=%d exceeds the %d IV cap", cp, max_cp)
+            Pokemon.iv_cache.setdefault(self.name, {})[max_cp] = False
+            self.iv_cache_dirty = True
             return False
         # find the optimal IV/level combination
         for a in range(0, 16):
@@ -337,10 +367,13 @@ class Pokemon():
                             optimal = [(a, d, s, l, t_cp, t_sp)]
                         elif t_sp == sp:
                             optimal.append((a, d, s, l, t_cp, t_sp))
-        # update the stats with the optimal values
         if optimal:
             o = optimal[0]
+            # update the stats with the optimal values
             self.update(attack=o[0], defense=o[1], stamina=o[2], level=o[3])
+            # cache the result for the next time
+            Pokemon.iv_cache.setdefault(self.name, {})[max_cp] = o
+            self.iv_cache_dirty = True
             return o
         return False
 
