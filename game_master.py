@@ -159,7 +159,9 @@ class GameMaster():
 
         type_list = []
 
-        for item in self._game_master['itemTemplate']:
+        items = self._game_master.get('itemTemplate') or self._game_master.get('itemTemplates')
+
+        for item in items:
             tid = item['templateId']
 
             # ignore suffixes
@@ -210,6 +212,10 @@ class GameMaster():
                 # form name takes precedence over family name
                 name = settings.get('form') or settings.get('uniqueId') or settings.get('pokemonId')
                 assert name
+                if 'type1' not in settings:
+                    settings['type1'] = settings['type']
+                elif 'type' not in settings:
+                    settings['type'] = settings['type1']
                 self.pokemon[name] = settings
                 continue
 
