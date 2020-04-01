@@ -76,6 +76,24 @@ class PokemonKeyError(KeyError):
         super().__init__(message)
 
 
+def diffDict(da, db):
+    """Return the differences between da and db."""
+    # Return None if they're the same
+    if da == db:
+        return None
+    # add items in da not in db
+    rv = {k: v for (k, v) in da.items() if k not in db}
+    for k, v in db.items():
+        if k not in da:
+            rv[k] = v
+        elif da[k] != v:
+            if isinstance(da[k], dict) and isinstance(v, dict):
+                rv[k] = diffDict(da[k], v)
+            else:
+                rv[k] = [da[k], v]
+    return rv
+
+
 class GameMaster():
     """Class for normalizing and retrieving data from GAME_MASTER.json"""
 
@@ -89,6 +107,7 @@ class GameMaster():
     K_CHARGED = "cinematicMoves"
     K_SMEARGLE = "SMEARGLE"
     K_SMEARGLE_MOVES = "SMEARGLE_MOVES_SETTINGS"
+    K_NORMAL_SUFFIX = "_NORMAL" # Normal suffix
 
     K_BONUS_DEF = "defenseBonusMultiplier"
 
@@ -264,6 +283,21 @@ class GameMaster():
 
             # warn about a possibly important item we're ignoring
             # logging.debug("Won't process %s", tid)
+
+        # remove POKEMON_NORMAL if POKEMON is also in the index
+        ns_len = -len(GameMaster.K_NORMAL_SUFFIX)
+        # make a list of _NORMAL pokemon
+        dups = [x for x in self.pokemon.keys() if x.endswith(GameMaster.K_NORMAL_SUFFIX)]
+        for name_l in dups:
+            name_s = name_l[:ns_len]
+            if name_s in self.pokemon:
+                diff_p = diffDict(self.pokemon[name], self.pokemon[name])
+                if diff_p is not None:
+                    # warn if POKEMON and POKEMON_NORMAL are different
+                    logging.warning("%s != %s: %s", name_l, name_s, diff_p)
+                del self.pokemon[name_l]
+            else:
+                logging.warning("%s can't find %s", name_l, name_s)
 
         # Add Smeargle's moves
         assert GameMaster.K_FAST not in self.pokemon[GameMaster.K_SMEARGLE]
