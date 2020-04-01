@@ -9,6 +9,7 @@ import urllib.request
 import subprocess
 import unittest
 import enum
+import itertools
 
 
 """
@@ -296,6 +297,12 @@ class GameMaster():
         """Return a tuple of charged) moves for this pokemon."""
         pdata = self.pokemon[name]
         return pdata.get(GameMaster.K_CHARGED, [])
+
+    def move_combinations(self, name, r=2):
+        """Generate all possible combinations of fast/charged moves for this pokemon."""
+        for fast in self.possible_fast(name):
+            for charged in itertools.combinations(self.possible_charged(name), r):
+                yield fast, charged
 
     def report(self):
         """Write a summary of the data we've received."""
