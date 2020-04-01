@@ -250,7 +250,7 @@ class Pokemon():
         if fast is VAL.RANDOM:
             fast = random.choice(self.possible_fast)
         if fast is not VAL.DONT_SET:
-            self.fast = Move(self, fast)
+            self.fast = isinstance(fast, Move) and fast or Move(self, fast)
 
         if charged is VAL.RANDOM:
             # pick 1 or 2 charged attacks
@@ -260,7 +260,8 @@ class Pokemon():
                 p_charged.remove(charged[0])
                 charged.append(random.choice(p_charged))
         if charged is not VAL.DONT_SET:
-            self.charged = [Move(self, x) for x in charged]
+            # make charged Moves if it's not a Move already
+            self.charged = [isinstance(c, Move) and c or Move(self, c) for c in charged]
 
         # reset to default combat values
         self.reset()
@@ -377,6 +378,46 @@ class Pokemon():
             return o
         return False
 
+    def move_combinations(self):
+        return self.gm.move_combinations(self.name)
+
+    def optimize_moves(self, target):
+        """Optimize the move set for a given target."""
+        combos = {}
+        for fname in self.possible_fast:
+            fast = Move(self, fname)
+            for cname in self.possible_charged:
+                charged = Move(self, cname)
+                t = (1.0 + fast.cooldown)
+                # damage per turn
+                dpt = fast.damage(target) / t
+                # energy per turn
+                ept = fast.energy_delta / t
+                # charged damage per energy
+                cdpe = charged.damage(target) / -charged.energy_delta
+                # add charged damage per turn
+                dpt += cdpe * ept
+                result = (fast, charged)
+                combos.setdefault(dpt, []).append(result)
+        results = sorted(combos.keys(), reverse=True)
+        best = combos[results[0]]
+        fast = best[0][0]
+        charged = [best[0][1]]
+        if len(best) > 1:
+            # Add the other best move
+            charged.append(best[1][1])
+        else:
+            for result in results[1:]:
+                for combo in combos[result]:
+                    charged2 = combo[1]
+                    if charged2.name != charged[0].name:
+                        charged.append(charged2)
+                        break
+                if len(charged) > 1:
+                    break
+        # update to the best fast/charged moves
+        self.update(fast=fast, charged=charged)
+
 
 class PokemonUnitTest(unittest.TestCase):
     gm = None
@@ -473,6 +514,35 @@ class PokemonUnitTest(unittest.TestCase):
                           context=ctx)
         self.assertEqual(18, kyogre.fast.damage(groudon))
         self.assertEqual(3, groudon.fast.damage(kyogre))
+
+    def test_move_combinations(self):
+        """Test the move combination iterator."""
+        p = Pokemon(self.gm)
+        i = 1
+        for fast, charged in p.move_combinations():
+            p.update(fast=fast, charged=charged)
+            logging.info("Move Combination %d: %s", i, p)
+            i += 1
+
+    def test_optimize_moves(self):
+        """Test that we can compute optimal moves correctly."""
+        ctx = CONTEXT.COMBAT
+        kyogre = Pokemon(self.gm, "KYOGRE", level=40,
+                         attack=15, defense=15, stamina=15,
+                         fast="WATERFALL_FAST", charged=["THUNDER"],
+                         context=ctx)
+        groudon = Pokemon(self.gm, "GROUDON", level=40,
+                          attack=15, defense=15, stamina=15,
+                          fast="DRAGON_TAIL_FAST", charged=["FIRE_BLAST"],
+                          context=ctx)
+        kyogre.optimize_moves(groudon)
+        logging.info("KvG: %s", kyogre)
+        groudon.optimize_moves(kyogre)
+        logging.info("GvK: %s", groudon)
+        kyogre.optimize_moves(kyogre)
+        logging.info("KvK: %s", kyogre)
+        groudon.optimize_moves(groudon)
+        logging.info("GvG: %s", kyogre)
 
 
 if __name__ == "__main__":
