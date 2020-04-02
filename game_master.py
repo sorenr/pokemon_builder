@@ -11,6 +11,7 @@ import unittest
 import enum
 import itertools
 import difflib
+import fnmatch
 
 
 """
@@ -115,6 +116,83 @@ class GameMaster():
     K_SHADOW_BONUS_DEF = "shadowPokemonDefenseBonusMultiplier"
     K_SHADOW_BONUS_ATK = "shadowPokemonAttackBonusMultiplier"
     K_PURIFIED_SUFFIX = "_PURIFIED"
+
+    # possible attacks including non Elite TM-able
+    _LEGACY = {
+        'ACID_FAST': ['GRIMER*', 'KOFFING*', 'WEEZING*', 'MUK*'],
+        'ANCIENT_POWER': ['MAMOSWINE*'],
+        'BITE_FAST': ['ARCANINE*', 'SHEDINJA*'],
+        'BLAST_BURN': ['CHARIZARD*', 'INFERNAPE*', 'TYPHLOSION*'],
+        'BLIZZARD': ['CLOYSTER'],
+        'BODY_SLAM': ['JIGGLYPUFF*', 'LICKITUNG*', 'LICKILICKY*', 'SLAKING*'],
+        'BUG_BITE_FAST': ['BUTTERFREE*', 'BEEDRILL*', 'PARASECT*', 'VENOMOTH*'],
+        'BULLDOZE': ['ARCANINE*'],
+        'BRINE': [],
+        'DARK_PULSE': ['GENGAR*'],
+        'DAZZLING_GLEAM': ['ALAKAZAM*'],
+        'DRAGON_PULSE': ['AMPHAROS*', 'GYARADOS*', 'LAPRAS*'],
+        'DRAGON_TAIL_FAST': ['GYARADOS*'],
+        'EARTH_POWER': ['FLYGON*'],
+        'EARTHQUAKE': ['GASTRODON*'],
+        'EMBER_FAST': ['CHARIZARD*', 'NINETALES*', 'RAPIDASH*', 'MOLTRES*'],
+        'FIRE_BLAST': ['PONYTA'],
+        'FRENZY_PLANT': ['MEGANIUM*', 'SCEPTILE*', 'TORTERRA*', 'VENUSAUR*'],
+        'FRUSTRATION': ['*_SHADOW'],
+        'GIGA_DRAIN': [],
+        'GRASS_KNOT': ['BRELOOM*'],
+        'GUNK_SHOT': ['EKANS*'],
+        'HEART_STAMP': [],
+        'HYDRO_CANNON': ['EMPOLEON*', 'SWAMPERT*', 'FERALIGATR*'],
+        'HYDRO_PUMP_BLASTOISE': ['BLASTOISE*'],
+        'HYPER_BEAM': ['MEWTWO'],
+        'ICE_BEAM': ['LAPRAS*'],
+        'ICE_SHARD_FAST': ['DEWGONG*', 'LAPRAS*'],
+        'IRON_HEAD': ['ONIX*'],
+        'LAST_RESORT': ['FLAREON*', 'GLACEON*', 'JOLTEON*', 'LEAFEON*', 'UMBREON*', 'VAPOREON*'],
+        'LICK_FAST': ['GENGAR*', 'HAUNTER*'],
+        'MEGA_DRAIN': [],
+        'MEGAHORN': ['RHYDON*'],
+        'METEOR_MASH': ['METAGROSS*'],
+        'NIGHT_SLASH': ['PERSIAN*'],
+        'OMINOUS_WIND': ['GASTLY*'],
+        'ORIGIN_PULSE': [],
+        'OUTRAGE': ['SALAMENCE*'],
+        'PARABOLIC_CHARGE': [],
+        'PLAY_ROUGH': ['JIGGLYPUFF*'],
+        'POWER_WHIP': ['TANGELA*'],
+        'PRECIPICE_BLADES': [],
+        'PSYBEAM': ['CHANSEY*'],
+        'PSYCHIC': ['ALAKAZAM*', 'GENGAR*'],
+        'PSYSHOCK': ['HYPNO*'],
+        'PSYSTRIKE': ['MEWTWO', 'MEWTWO_A'],
+        'ROCK_SLIDE': ['ONIX*'],
+        'THUNDER': ['RAICHU*'],
+        'REST': [],
+        'RETURN': ['*_PURIFIED'],
+        'ROCK_WRECKER': ['RHYPERIOR*'],
+        'SACRED_SWORD': ['COBALION*'],
+        'SCALD': ['POLIWHIRL*'],
+        'SCALD_BLASTOISE': ['BLASTOISE*'],
+        'SHADOW_BALL': ['MEWTWO'],
+        'SLUDGE_WAVE': ['GENGAR*'],
+        'SMACK_DOWN_FAST': ['TYRANITAR*'],
+        'SIGNAL_BEAM': ['VOLTORB*'],
+        'STOMP': ['HITMONLEE*'],
+        'SUCKER_PUNCH_FAST': ['GASTLY*'],
+        'SWIFT': ['DODUO'],
+        'SUBMISSION': ['POLIWRATH*'],
+        'SYNCHRONOISE': ['GALLADE*', 'GARDEVOIR*'],
+        'THUNDER_SHOCK_FAST': ['ZAPDOS*'],
+        'TWISTER': ['SPEAROW*', 'FEAROW*'],
+        'WATER_GUN_FAST': ['FERALIGATR*', 'SEEL*'],
+        'WATER_GUN_FAST_BLASTOISE': ['BLASTOISE*'],
+        'WEATHER_BALL_ROCK': [],
+        'WING_ATTACK_FAST': ['CHARIZARD*'],
+        'WRAP_GREEN': [],
+        'WRAP_PINK': [],
+        'YAWN_FAST': ['SNORLAX'],
+        'ZEN_HEADBUTT_FAST': ['EXEGGCUTE'],
+    }
 
     # item prefixes to ignore
     _TID_IGNORE = [
@@ -298,6 +376,34 @@ class GameMaster():
                 del self.pokemon[name_l]
             else:
                 logging.warning("%s can't find %s", name_l, name_s)
+
+        # add legacy moves to the lists of possible moves
+        legacy_fast = 0
+        legacy_charged = 0
+        all_moves = set(self.moves_combat.keys())
+        all_moves.update(self.moves_battle.keys())
+        for move, patterns in GameMaster._LEGACY.items():
+            if move not in all_moves:
+                raise PokemonKeyError(move, all_moves)
+            for pattern in patterns:
+                matches = [x for x in self.pokemon.keys() if fnmatch.fnmatch(x, pattern)]
+                if not matches:
+                    raise Exception("No pokemon match %s:%s", move, pattern)
+                for match in matches:
+                    if move.endswith("_FAST"):
+                        if move in self.pokemon[match]["quickMoves"]:
+                            logging.warning("%s already has %s", match, move)
+                        else:
+                            legacy_fast += 1
+                            logging.debug("%d %s legacy %s", legacy_fast, match, move)
+                            self.pokemon[match]["quickMoves"].append(move)
+                    elif move in self.pokemon[match]["cinematicMoves"]:
+                        logging.warning("%s already has %s", match, move)
+                    else:
+                        legacy_charged += 1
+                        logging.debug("%d %s legacy %s", legacy_charged, match, move)
+                        self.pokemon[match]["cinematicMoves"].append(move)
+        logging.info("added %d fast, %d charged legacy moves", legacy_fast, legacy_charged)
 
         # Add Smeargle's moves
         assert GameMaster.K_FAST not in self.pokemon[GameMaster.K_SMEARGLE]
