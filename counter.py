@@ -56,7 +56,7 @@ def combat(p1, p2):
 
 
 def rate(args):
-    gm, names, opponent, max_cp = args
+    gm, names, opponents, max_cp = args
     p = pokemon.Pokemon(gm)
 
     results = {}
@@ -66,11 +66,14 @@ def rate(args):
         p.optimize_iv(max_cp=max_cp)
         for fast, charged in p.move_combinations():
             p.update(fast=fast, charged=charged)
-            winner = combat(p, opponent)
-            result = winner.hp
-            if winner is opponent:
-                result = -result
-            results.setdefault(result, []).append(str(p))
+            rating = 0
+            for opponent in opponents:
+                winner = combat(p, opponent)
+                result = winner.hp
+                if winner is opponent:
+                    result = -result
+                rating += result
+            results.setdefault(rating, []).append(str(p))
 
     return results
 
@@ -82,17 +85,21 @@ def chunk(lst, n):
         yield lst[i:i + n]
 
 
-def counter(gm, target, max_cp=None, threads=None):
-    if ':' in target:
-        target, moves = target.split(":", 1)
-        fast, charged = moves.split(",", 1)
-        charged = charged.split("+")
-        target = pokemon.Pokemon(gm, name=target, fast=fast, charged=charged)
-    else:
-        target = pokemon.Pokemon(gm, target)
+def counter(gm, names, max_cp=None, threads=None):
+    opponents = []
 
-    target.optimize_iv(max_cp=max_cp)
-    print("target:", target)
+    for name in names:
+        if ':' in name:
+            name, moves = target.split(":", 1)
+            fast, charged = moves.split(",", 1)
+            charged = charged.split("+")
+            p = pokemon.Pokemon(gm, name=name, fast=fast, charged=charged)
+        else:
+            p = pokemon.Pokemon(gm, name)
+
+        p.optimize_iv(max_cp=max_cp)
+        logging.info("opponent: %s", p.name)
+        opponents.append(p)
 
     results = {}
     names = list(gm.pokemon.keys())
@@ -104,7 +111,7 @@ def counter(gm, target, max_cp=None, threads=None):
     chunks = chunk(names, chunk_size)
 
     pool = multiprocessing.Pool(threads)
-    for result in pool.imap_unordered(rate, [(gm, names, target, max_cp) for names in chunks]):
+    for result in pool.imap_unordered(rate, [(gm, names, opponents, max_cp) for names in chunks]):
         results.update(result)
 
     for result in sorted(results.keys()):
@@ -198,6 +205,6 @@ if __name__ == "__main__":
 
     if args.opponents:
         gm = game_master.GameMaster()
-        counter(gm, args.opponents[0], max_cp=args.max_cp)
+        counter(gm, args.opponents, max_cp=args.max_cp)
     else:
         unittest.main()
