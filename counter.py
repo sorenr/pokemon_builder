@@ -3,6 +3,7 @@
 import unittest
 import argparse
 import logging
+import multiprocessing
 
 import game_master
 import pokemon
@@ -54,35 +55,57 @@ def combat(p1, p2):
         turn += 1
 
 
-def counter(gm, opponent, max_cp=None):
-    if ':' in opponent:
-        opponent, moves = opponent.split(":", 1)
-        fast, charged = moves.split(",", 1)
-        charged = charged.split("+")
-        opponent = pokemon.Pokemon(gm, name=opponent, fast=fast, charged=charged)
-    else:
-        opponent = pokemon.Pokemon(gm, opponent)
-
-    opponent.optimize_iv(max_cp=max_cp)
-    print("opponent:", opponent)
-
+def rate(args):
+    gm, names, opponent, max_cp = args
     p = pokemon.Pokemon(gm)
 
     results = {}
-    names = list(gm.pokemon.keys())
-    # smeargle has too many move combinations
-    names.remove('SMEARGLE')
-    for name in names:
-        p.update(name=name)
-        p.optimize_iv(max_cp=max_cp)
 
-        for fast, charged in gm.move_combinations(name):
+    for name in names:
+        p.update(name)
+        p.optimize_iv(max_cp=max_cp)
+        for fast, charged in p.move_combinations():
             p.update(fast=fast, charged=charged)
             winner = combat(p, opponent)
             result = winner.hp
             if winner is opponent:
                 result = -result
             results.setdefault(result, []).append(str(p))
+
+    return results
+
+
+def chunk(lst, n):
+    """Divide a list into n-sized chunks."""
+    n = max(1, n)
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
+def counter(gm, target, max_cp=None, threads=None):
+    if ':' in target:
+        target, moves = target.split(":", 1)
+        fast, charged = moves.split(",", 1)
+        charged = charged.split("+")
+        target = pokemon.Pokemon(gm, name=target, fast=fast, charged=charged)
+    else:
+        target = pokemon.Pokemon(gm, target)
+
+    target.optimize_iv(max_cp=max_cp)
+    print("target:", target)
+
+    results = {}
+    names = list(gm.pokemon.keys())
+    # smeargle has too many move combinations
+    names.remove('SMEARGLE')
+
+    # divide the name list into job-sized chunks
+    chunk_size = int(len(names)/multiprocessing.cpu_count())
+    chunks = chunk(names, chunk_size)
+
+    pool = multiprocessing.Pool(threads)
+    for result in pool.imap_unordered(rate, [(gm, names, target, max_cp) for names in chunks]):
+        results.update(result)
 
     for result in sorted(results.keys()):
         for c in results[result]:
@@ -159,6 +182,7 @@ if __name__ == "__main__":
     """Not intended for standalone use."""
     parser = argparse.ArgumentParser(description='classes for pokemon analysis')
     parser.add_argument("-v", dest="verbose", help="verbose output", action="store_true")
+    parser.add_argument("-t", help="threads", type=int)
     parser.add_argument("--cp", dest="max_cp", type=int, help="cp limit")
     parser.add_argument("opponents", nargs="*", help="opponents to counter")
     args = parser.parse_args()
