@@ -72,14 +72,17 @@ class Move():
         if not self.power:
             return 1
         attack = self.pokemon.attack * self.bonus_atk
-        if self.pokemon.is_purified and target.is_shadow:
+        if self.pokemon.is_purified and target is not None and target.is_shadow:
             attack *= self.pokemon.settings.get('purifiedPokemonAttackMultiplierVsShadow', 1)
         attack *= self.pokemon.gm.buff_multiplier_attack[self.pokemon.buff_attack]
 
-        defense = target.defense * target.bonus_def
-        defense *= target.gm.buff_multiplier_defense[target.buff_defense]
+        defense = 1
+        effective = 1
+        if target is not None:
+            defense *= target.defense * target.bonus_def
+            defense *= target.gm.buff_multiplier_defense[target.buff_defense]
+            effective *= self.gm.effect(self.type, target.type)
 
-        effective = self.gm.effect(self.type, target.type)
         return 1 + int(0.5 * self.power * attack / defense * self.stab * effective)
 
     def attack(self, target, damage=None, shield=True):
@@ -381,7 +384,7 @@ class Pokemon():
     def move_combinations(self):
         return self.gm.move_combinations(self.name)
 
-    def optimize_moves(self, target):
+    def optimize_moves(self, target=None):
         """Optimize the move set for a given target."""
         combos = {}
         for fname in self.possible_fast:
