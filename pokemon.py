@@ -306,7 +306,7 @@ class Pokemon():
         """Return a human-readable string representation of the pokemon."""
         iv_str = "{0:d}/{1:d}/{2:d}".format(self.iv_attack, self.iv_defense, self.iv_stamina)
         type_str = "/".join(sorted([str(x) for x in self.type]))
-        moves_str = str(self.fast) + " " + "+".join([str(x) for x in self.charged])
+        moves_str = str(self.fast) + " " + "+".join(sorted([str(x) for x in self.charged]))
         cp = self.cp()
         return f"{self.name:s} ({type_str:s}) {iv_str:s} {self.level:0.1f} {moves_str:s} CP={cp:0.1f}"
 
