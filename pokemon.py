@@ -8,6 +8,7 @@ import enum
 import time
 import json
 import os
+import fnmatch
 
 import game_master
 
@@ -63,6 +64,14 @@ class Move():
             self.bonus_atk = self.pokemon.settings.get('fastAttackBonusMultiplier', 1)
         else:
             self.bonus_atk = self.pokemon.settings.get('chargeAttackBonusMultiplier', 1)
+
+        legacy = game_master.GameMaster._LEGACY.get(self.name, [])
+        for pattern in legacy:
+            if fnmatch.fnmatch(self.pokemon.name, pattern):
+                self.is_legacy = True
+                break
+        else:
+            self.is_legacy = False
 
         self.power = self.data.get('power', 0)
         if self.type in self.pokemon.type:
@@ -128,9 +137,10 @@ class Move():
 
     def __str__(self):
         """Return the attack name, minus the suffix."""
+        suffix = self.is_legacy and '*' or ''
         if self.name.endswith(self._FSUFFIX):
-            return self.name[:-self._FL]
-        return self.name
+            return self.name[:-self._FL] + suffix
+        return self.name + suffix
 
 
 class Cache(dict):
