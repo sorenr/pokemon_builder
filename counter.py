@@ -9,7 +9,7 @@ import game_master
 import pokemon
 
 
-def attack(attacker, target):
+def attack(attacker, target, move):
     """Pick an attack (if ready)"""
     # do a fast attack
     if attacker.cooldown >= attacker.fast.cooldown:
@@ -17,26 +17,39 @@ def attack(attacker, target):
     else:
         attacker.cooldown += 1
 
-    # for every attack...
-    for attack in attacker.charged:
-        # if we have enough energy to trigger it...
-        if attacker.energy >= -attack.energy_delta:
-            damage = attack.damage(target)
-            # always shield if the damage would kill the target
-            shield = target.hp <= damage
-            attack.attack(target, shield=shield, damage=damage)
-            target.cooldown -= 1
-            return
+    # if we have enough energy to trigger it...
+    if attacker.energy >= -move.energy_delta:
+        damage = move.damage(target)
+        # always shield if the damage would kill the target
+        shield = target.hp <= damage
+        move.attack(target, shield=shield, damage=damage)
+        target.cooldown -= 1
+        return
 
 
-def combat(p1, p2):
+def best_move(attacker, target):
+    """Pick the best attack for the target."""
+    if len(attacker.charged) == 1:
+        return attacker.charged[0]
+    move_best = None
+    dpe_best = None
+    for move in attacker.charged:
+        damage = move.damage(target)
+        dpe = damage/-move.energy_delta
+        if dpe_best is None or dpe_best < dpe:
+            move_best = move
+            dpe_best = dpe
+    return move_best
+
+
+def combat(p1, attack_p1, p2, attack_p2):
     """Main combat loop."""
     p1.reset()
     p2.reset()
 
     # pokemon with the higher attack goes first
     if p2.attack > p1.attack:
-        p1, p2 = p2, p1
+        p1, attack_p1, p2, attack_p2 = p2, attack_p2, p1, attack_p1
 
     logging.debug("p1: %s (%0.1f)", p1.name, p1.attack)
     logging.debug("p2: %s (%0.1f)", p2.name, p2.attack)
@@ -44,11 +57,11 @@ def combat(p1, p2):
     turn = 0
     while True:
         logging.debug("turn %d:", turn)
-        attack(p1, p2)
+        attack(p1, p2, attack_p1)
         if p2.hp <= 0:
             logging.debug("%s wins with %0.1f hp", p1.name, p1.hp)
             return p1
-        attack(p2, p1)
+        attack(p2, p1, attack_p2)
         if p1.hp <= 0:
             logging.debug("%s wins with %0.1f hp", p2.name, p2.hp)
             return p2
@@ -66,14 +79,16 @@ def rate(args):
         p.optimize_iv(max_cp=max_cp)
         for fast, charged in p.move_combinations():
             p.update(fast=fast, charged=charged)
-            rating = 0
+            results_t = []
             for opponent in opponents:
-                winner = combat(p, opponent)
+                p_best = best_move(p, opponent)
+                t_best = best_move(opponent, p)
+                winner = combat(p, p_best, opponent, t_best)
                 result = winner.hp
                 if winner is opponent:
                     result = -result
-                rating += result
-            results.setdefault(rating, []).append(str(p))
+                results_t.append(result)
+            results.setdefault(tuple(results_t), []).append(str(p))
 
     return results
 
@@ -107,17 +122,28 @@ def counter(gm, names, max_cp=None, threads=None):
     names.remove('SMEARGLE')
 
     # divide the name list into job-sized chunks
-    chunk_size = int(len(names)/multiprocessing.cpu_count())
+    chunk_size = int(len(names) / (3 * multiprocessing.cpu_count()))
     chunks = chunk(names, chunk_size)
 
     pool = multiprocessing.Pool(threads)
-    for result in pool.imap_unordered(rate, [(gm, names, opponents, max_cp) for names in chunks]):
-        results.update(result)
+    for result_t in pool.imap_unordered(rate, [(gm, names, opponents, max_cp) for names in chunks]):
+        for bouts, monstas in result_t.items():
+            # sum sqrt because for multiple targets winning one
+            # by a lot matters less than winning all by a little
+            rating = sum([x > 0 and pow(x, 0.5) for x in bouts])
+            results.setdefault(rating, {}).setdefault(bouts, []).extend(monstas)
 
-    for result in sorted(results.keys()):
-        for c in results[result]:
-            print("{0:0.2f} {1:s}".format(result, c))
+    for rank in sorted(results.keys()):
+        bouts_h = results[rank]
+        for bout in sorted(bouts_h.keys()):
+            bout_str = " ".join(["{0:0.1f}".format(x) for x in bout])
+            monstas = bouts_h[bout]
+            for monsta in monstas:
+                print("{:0.2f} [{:s}] {:s}".format(rank, bout_str, monsta))
 
+    print()
+    for opponent in opponents:
+        print(str(opponent))
 
 class CounterUnitTest(unittest.TestCase):
     gm = None
@@ -142,7 +168,7 @@ class CounterUnitTest(unittest.TestCase):
             charged=["BODY_SLAM"])
         self.assertEqual(2499, int(snorlax.cp()))
 
-        winner = combat(lucario, snorlax)
+        winner = combat(lucario, lucario.charged[0], snorlax, snorlax.charged[0])
         # lucario wins...
         self.assertIs(winner, lucario)
         # ...with 105 hp left.
