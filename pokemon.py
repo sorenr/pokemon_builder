@@ -146,6 +146,7 @@ class Cache(dict):
     def __init__(self, path):
         self.dirty = False
         self.path = path
+        self.dirty = False
         try:
             with open(path) as fd:
                 self.update(json.loads(fd.read()))
