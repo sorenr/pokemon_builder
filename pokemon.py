@@ -151,16 +151,40 @@ class Cache(dict):
             with open(path) as fd:
                 self.update(json.loads(fd.read()))
             logging.debug("Loaded %d entries from %s", len(self), self.path)
+            self.fixup(self)
         except FileNotFoundError:
             pass
+
+    def fixup(self, loc):
+        """Convert 'null':value into None:value."""
+        for k in list(loc.keys()):
+            v = loc[k]
+            try:
+                ke = eval(k)
+            except:
+                pass
+            else:
+                loc[ke] = loc[k]
+                del loc[k]
+            if isinstance(v, dict):
+                self.fixup(v)
+
+    def write_prep(self, loc):
+        """Prepare a dict for writing to json."""
+        rv = {}
+        for k, v in loc.items():
+            if isinstance(v, dict):
+                v = self.write_prep(v)
+            rv[str(k)] = v
+        return rv
 
     def write(self, newpath=None):
         """Write the cache before we exit."""
         if not newpath:
             newpath = self.path
         with open(newpath, 'w') as fd:
-            json.dump(self, fd)
-        logging.debug("Wrote %d entries to %s", len(self), self.path)
+            json.dump(self.write_prep(self), fd, sort_keys=True)
+        logging.info("Wrote %d entries to %s", len(self), self.path)
         return newpath
 
 
