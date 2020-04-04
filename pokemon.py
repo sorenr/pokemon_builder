@@ -295,7 +295,7 @@ class Pokemon():
         # A move's stats depend on its pokemon, so set the pokemon stats before setting its moves.
         if fast is VAL.RANDOM:
             fast = random.choice(self.possible_fast)
-        if fast is not VAL.DONT_SET:
+        if fast not in [VAL.DONT_SET, VAL.OPTIMAL]:
             self.fast = isinstance(fast, Move) and fast or Move(self, fast)
 
         if charged is VAL.RANDOM:
@@ -305,12 +305,16 @@ class Pokemon():
             if len(p_charged) > 1 and random.random() > 0.5:
                 p_charged.remove(charged[0])
                 charged.append(random.choice(p_charged))
-        if charged is not VAL.DONT_SET:
+        if charged not in [VAL.DONT_SET, VAL.OPTIMAL]:
             # make charged Moves if it's not a Move already
             self.charged = [isinstance(c, Move) and c or Move(self, c) for c in charged]
 
         # reset to default combat values
         self.reset()
+
+        # pick optimal moves if requested
+        if fast is VAL.OPTIMAL or charged is VAL.OPTIMAL:
+            self.optimize_moves(target=None, fast=fast is VAL.OPTIMAL, charged=charged is VAL.OPTIMAL)
 
     def cp(self):
         # CP = (Attack * Defense^0.5 * Stamina^0.5 * CP_Multiplier^2) / 10
