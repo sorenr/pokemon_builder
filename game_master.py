@@ -10,6 +10,7 @@ import subprocess
 import unittest
 import enum
 import itertools
+import difflib
 
 
 """
@@ -62,6 +63,17 @@ class Types(enum.Enum):
 
 
 TYPE_LIST = sorted(list(Types), key=lambda t: t.value)
+
+
+class PokemonKeyError(KeyError):
+    """A KeyError exception which suggests valid alternatives."""
+    def __init__(self, key, alternatives):
+        if key is None:
+            super().__init__("None: did you mean pokemon.VAL.RANDOM or pokemon.VAL.OPTIMAL?")
+        matches = difflib.get_close_matches(key, alternatives)
+        matches = ", ".join(matches)
+        message = "{0:s}: did you mean {1:s} ?".format(key, matches)
+        super().__init__(message)
 
 
 class GameMaster():
