@@ -9,6 +9,7 @@ import time
 import json
 import os
 import fnmatch
+import math
 
 import game_master
 
@@ -440,24 +441,64 @@ class Pokemon():
     def move_combinations(self):
         return self.gm.move_combinations(self.name)
 
-    def optimize_moves(self, target=None):
-        """Optimize the move set for a given target."""
+    def dpt(self, fast, charged, target=None):
+        """damage per turn against the given target"""
+        t = (1.0 + fast.cooldown)
+        # damage per turn
+        dpt = fast.damage(target) / t
+        # energy per turn
+        ept = fast.energy_delta / t
+        # charged damage per energy
+        cdpe = charged.damage(target) / -charged.energy_delta
+        # add charged damage per turn
+        return dpt + cdpe * ept
+
+    def ttk(self, fast, charged, target, shields=0):
+        """turns to kill the given target"""
+        self.reset()
+        target.reset()
+        turns = 0
+        while target.hp > 0:
+            # charged attack if it's ready
+            if self.energy >= -charged.energy_delta:
+                charged.attack(target, shield=shields >= 1)
+                shields = max(shields - 1, 0)
+                turns += 1
+            # otherwise fast attack
+            else:
+                damage_fast = fast.damage(target)
+                # turns to next charged attack
+                next_charged = (-charged.energy_delta - self.energy) / fast.energy_delta
+                # turns to kill with only fast attacks
+                next_kill = target.hp / damage_fast
+                # perform the next N fast attacks
+                fast_attacks = int(math.ceil(min(next_charged, next_kill)))
+                target.hp -= fast_attacks * damage_fast
+                self.energy += fast_attacks * fast.energy_delta
+                turns += fast_attacks * (1 + fast.cooldown)
+        return turns
+
+    def optimize_moves(self, target=None, fast=True, charged=True):
+        """Optimize the move set for damage per turn against a given target."""
         combos = {}
-        for fname in self.possible_fast:
-            fast = Move(self, fname)
-            for cname in self.possible_charged:
-                charged = Move(self, cname)
-                t = (1.0 + fast.cooldown)
-                # damage per turn
-                dpt = fast.damage(target) / t
-                # energy per turn
-                ept = fast.energy_delta / t
-                # charged damage per energy
-                cdpe = charged.damage(target) / -charged.energy_delta
-                # add charged damage per turn
-                dpt += cdpe * ept
-                result = (fast, charged)
-                combos.setdefault(dpt, []).append(result)
+
+        # generate possible fast moves
+        if fast:
+            possible_fast = [Move(self, name) for name in self.possible_fast]
+        else:
+            possible_fast = [self.fast]
+
+        # generate possible charged moves
+        if charged:
+            possible_charged = [Move(self, name) for name in self.possible_charged]
+        else:
+            possible_charged = self.charged
+
+        for move_f in possible_fast:
+            for move_c in possible_charged:
+                dpt = self.dpt(move_f, move_c, target)
+                combo = (move_f, move_c)
+                combos.setdefault(dpt, []).append(combo)
         results = sorted(combos.keys(), reverse=True)
         best = combos[results[0]]
         fast = best[0][0]
@@ -602,6 +643,30 @@ class PokemonUnitTest(unittest.TestCase):
         logging.info("KvK: %s", kyogre)
         groudon.optimize_moves(groudon)
         logging.info("GvG: %s", kyogre)
+
+    def test_ttk_lucario_tyranitar(self):
+        lucario = Pokemon(self.gm, "LUCARIO", level=40,
+                          attack=15, defense=15, stamina=15,
+                          fast="COUNTER_FAST", charged=["POWER_UP_PUNCH"],
+                          context=CONTEXT.COMBAT)
+        tyranitar = Pokemon(self.gm, "TYRANITAR", level=40,
+                            attack=15, defense=15, stamina=15,
+                            fast="SMACK_DOWN_FAST", charged=["CRUNCH"],
+                            context=CONTEXT.COMBAT)
+        self.assertEqual(21, lucario.ttk(fast=lucario.fast, charged=lucario.charged[0], target=tyranitar, shields=1))
+        self.assertEqual(41, tyranitar.ttk(fast=tyranitar.fast, charged=tyranitar.charged[0], target=lucario, shields=1))
+
+    def test_ttk_lucario_snorlax(self):
+        lucario = Pokemon(self.gm, "LUCARIO", level=40,
+                          attack=15, defense=15, stamina=15,
+                          fast="COUNTER_FAST", charged=["POWER_UP_PUNCH"],
+                          context=CONTEXT.COMBAT)
+        snorlax = Pokemon(self.gm, "SNORLAX", level=40,
+                          attack=15, defense=15, stamina=15,
+                          fast="LICK_FAST", charged=["BODY_SLAM"],
+                          context=CONTEXT.COMBAT)
+        self.assertEqual(30, lucario.ttk(fast=lucario.fast, charged=lucario.charged[0], target=snorlax, shields=1))
+        self.assertEqual(38, snorlax.ttk(fast=snorlax.fast, charged=snorlax.charged[0], target=lucario, shields=1))
 
 
 if __name__ == "__main__":
