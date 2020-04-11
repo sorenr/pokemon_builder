@@ -48,7 +48,10 @@ class Move():
     def update(self, name):
         """Set the attack name and the data depending on that name."""
         self.name = name
-        self.data = self.pokemon.moves[self.name]
+        try:
+            self.data = self.pokemon.moves[self.name]
+        except KeyError:
+            raise game_master.PokemonKeyError(self.name, self.pokemon.moves)
         self.buffs = self.data.get("buffs")
         self.cooldown = self.data.get('durationTurns', 0)
         self.energy_delta = self.data.get('energyDelta', 0)
@@ -198,7 +201,10 @@ class Pokemon():
             name = random.choice(list(self.gm.pokemon.keys()))
         if name is not VAL.DONT_SET:
             self.name = name
-            self.data = self.gm.pokemon[self.name]
+            try:
+                self.data = self.gm.pokemon[self.name]
+            except KeyError:
+                raise game_master.PokemonKeyError(self.name, self.gm.pokemon)
             self.stats = self.data['stats']
             self.type = {self.data['type1'], self.data.get('type2')}
             self.type = {game_master.Types[x] for x in self.type if x is not None}
