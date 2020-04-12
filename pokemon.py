@@ -135,6 +135,9 @@ class Move():
             target.buff_defense += self.buffs.get('targetDefenseStatStageChange', 0)
             target.buff_defense = clamp(target.buff_defense, 0, len(target.gm.buff_multiplier_defense) - 1)
 
+    def __repr__(self):
+        return "'{0:s}'".format(self.name)
+
     def __str__(self):
         """Return the attack name, minus the suffix."""
         suffix = self.is_legacy and '*' or ''
@@ -333,6 +336,15 @@ class Pokemon():
         moves_str = str(self.fast) + " " + "+".join(sorted([str(x) for x in self.charged]))
         cp = self.cp()
         return f"{self.name:s} ({type_str:s}) {iv_str:s} {self.level:0.1f} {moves_str:s} CP={cp:0.1f}"
+
+    def __repr__(self):
+        args = [self.name,
+                self.fast, self.charged,
+                self.iv_attack, self.iv_defense, self.iv_stamina,
+                self.level]
+        args = [repr(x) for x in args]
+        args = ", ".join(args)
+        return "{0:s}({1:s})".format(self.__class__.__name__, args)
 
     def __eq__(self, b):
         """Return whether we're comparing two identical pokemon."""
