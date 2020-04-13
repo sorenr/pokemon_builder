@@ -4,6 +4,7 @@ import unittest
 import argparse
 import logging
 import multiprocessing
+import re
 
 import game_master
 import pokemon
@@ -83,29 +84,74 @@ def combat(p1, attack_p1, p2, attack_p2):
             return p2
 
 
-def rate(args):
-    gm, names, opponents, max_cp = args
-    p = pokemon.Pokemon(gm)
+class Ranker():
+    """Copute fitness for a set of targets."""
+    def __init__(self, gm, opponent_names, max_cp=None):
+        self.gm = gm
+        self.max_cp = max_cp
+        self.p = pokemon.Pokemon(gm)
+        self.opponents = []
 
-    results = {}
+        # generate the target list to battle against all possible challengers
+        for opponent_name in [x.upper() for x in opponent_names]:
+            parts = re.split(r'[:,+]', opponent_name)
+            opponent_name, charged = parts[0], parts[1:]
+            fast = [x for x in parts if x.endswith("_FAST")]
+            if fast:
+                assert 1 == len(fast)
+                fast = fast[0]
+                charged.remove(fast)
+            # select the best general attacks if no specific attack is selected
+            else:
+                fast = pokemon.VAL.OPTIMAL
+            if not charged:
+                charged = pokemon.VAL.OPTIMAL
+            opponent = pokemon.Pokemon(gm, name=opponent_name, fast=fast, charged=charged)
+            assert opponent.optimize_iv(max_cp=max_cp)
+            self.opponents.append(opponent)
 
-    for name in names:
-        p.update(name)
-        p.optimize_iv(max_cp=max_cp)
-        for fast, charged in p.move_combinations():
-            p.update(fast=fast, charged=charged)
-            results_t = []
-            for opponent in opponents:
-                p_best = best_move(p, opponent)
-                t_best = best_move(opponent, p)
-                winner = combat(p, p_best, opponent, t_best)
-                result = winner.hp
-                if winner is opponent:
-                    result = -result
-                results_t.append(result)
-            results.setdefault(tuple(results_t), []).append(str(p))
+    def rank_combat(self, names):
+        """Rank pokemon listed in 'names' against the given targets."""
+        results = {}
 
-    return results
+        for name in names:
+            self.p.update(name)
+            self.p.optimize_iv(max_cp=self.max_cp)
+            for fast, charged in self.p.move_combinations():
+                self.p.update(fast=fast, charged=charged)
+                results_t = []
+                for opponent in self.opponents:
+                    p_best = best_move(p, opponent)
+                    t_best = best_move(opponent, p)
+                    winner = combat(p, p_best, opponent, t_best)
+                    result = winner.hp
+                    if winner is opponent:
+                        result = -result
+                    results_t.append(result)
+                results.setdefault(tuple(results_t), []).append(str(p))
+
+        return results
+
+    def rank_ttk(self, names):
+        """Rank pokemon listed in 'names' against the turns required to kill each other."""
+        results = {}
+
+        for name in names:
+            self.p.update(name)
+            self.p.optimize_iv(max_cp=self.max_cp)
+            for fast, charged in self.p.move_combinations():
+                self.p.update(fast=fast, charged=charged)
+                results_t = []
+                for opponent in self.opponents:
+                    p_best = best_move(self.p, opponent)
+                    o_best = best_move(opponent, self.p)
+                    ttk_o = self.p.ttk(self.p.fast, p_best, opponent)
+                    ttk_p = opponent.ttk(opponent.fast, o_best, self.p)
+                    result = ttk_p - ttk_o
+                    results_t.append(result)
+                results.setdefault(tuple(results_t), []).append(str(self.p))
+
+        return results
 
 
 def chunk(lst, n):
@@ -115,38 +161,31 @@ def chunk(lst, n):
         yield lst[i:i + n]
 
 
-def counter(gm, names, max_cp=None, threads=None):
-    opponents = []
+def counter(gm, opponent_names, max_cp=None, threads=1):
+    ranker = Ranker(gm, opponent_names, max_cp=max_cp)
 
-    for name in names:
-        if ':' in name:
-            name, moves = target.split(":", 1)
-            fast, charged = moves.split(",", 1)
-            charged = charged.split("+")
-            p = pokemon.Pokemon(gm, name=name, fast=fast, charged=charged)
-        else:
-            p = pokemon.Pokemon(gm, name)
-
-        p.optimize_iv(max_cp=max_cp)
-        logging.info("opponent: %s", p.name)
-        opponents.append(p)
-
-    results = {}
-    names = list(gm.pokemon.keys())
+    team_names = list(gm.pokemon.keys())
     # smeargle has too many move combinations
-    names.remove('SMEARGLE')
+    team_names.remove('SMEARGLE')
 
-    # divide the name list into job-sized chunks
-    chunk_size = int(len(names) / (3 * multiprocessing.cpu_count()))
-    chunks = chunk(names, chunk_size)
+    rank_func = ranker.rank_ttk
+    # rank_func = ranker.rank_combat
 
-    pool = multiprocessing.Pool(threads)
-    for result_t in pool.imap_unordered(rate, [(gm, names, opponents, max_cp) for names in chunks]):
-        for bouts, monstas in result_t.items():
-            # sum sqrt because for multiple targets winning one
-            # by a lot matters less than winning all by a little
-            rating = sum([x > 0 and pow(x, 0.5) for x in bouts])
-            results.setdefault(rating, {}).setdefault(bouts, []).extend(monstas)
+    if threads == 1:
+        # rank the opponents in a single thread
+        results = rank_func(team_names)
+    else:
+        results = {}
+        # divide the name list into job-sized chunks
+        chunk_size = int(len(team_names) / threads)
+        team_name_chunks = chunk(team_names, chunk_size)
+        pool = multiprocessing.Pool(threads)
+        for result_t in pool.imap_unordered(rank_func, team_name_chunks):
+            for bouts, monstas in result_t.items():
+                # sum sqrt because for multiple targets winning one
+                # by a lot matters less than winning all by a little
+                rating = sum([x > 0 and pow(x, 0.5) for x in bouts])
+                results.setdefault(rating, {}).setdefault(bouts, []).extend(monstas)
 
     for rank in sorted(results.keys()):
         bouts_h = results[rank]
@@ -157,8 +196,10 @@ def counter(gm, names, max_cp=None, threads=None):
                 print("{:0.2f} [{:s}] {:s}".format(rank, bout_str, monsta))
 
     print()
-    for opponent in opponents:
+    # print the targets we've ranked against
+    for opponent in ranker.opponents:
         print(str(opponent))
+
 
 class CounterUnitTest(unittest.TestCase):
     gm = None
@@ -230,7 +271,7 @@ if __name__ == "__main__":
     """Not intended for standalone use."""
     parser = argparse.ArgumentParser(description='classes for pokemon analysis')
     parser.add_argument("-v", dest="verbose", help="verbose output", action="store_true")
-    parser.add_argument("-t", help="threads", type=int)
+    parser.add_argument("-t", dest="threads", type=int, default=multiprocessing.cpu_count())
     parser.add_argument("--cp", dest="max_cp", type=int, help="cp limit")
     parser.add_argument("opponents", nargs="*", help="opponents to counter")
     args = parser.parse_args()
@@ -246,6 +287,6 @@ if __name__ == "__main__":
 
     if args.opponents:
         gm = game_master.GameMaster()
-        counter(gm, args.opponents, max_cp=args.max_cp)
+        counter(gm, args.opponents, max_cp=args.max_cp, threads=args.threads)
     else:
         unittest.main()
