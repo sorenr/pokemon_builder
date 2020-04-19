@@ -9,22 +9,23 @@ import game_master
 import pokemon
 
 
-def attack(attacker, target, move):
-    """Pick an attack (if ready)"""
+def attack_fast(attacker, target):
+    """Do a fast attack (if ready)."""
     # do a fast attack
     if attacker.cooldown >= attacker.fast.cooldown:
         attacker.fast.attack(target)
     else:
         attacker.cooldown += 1
 
-    # if we have enough energy to trigger it...
+
+def attack_charged(attacker, target, move):
+    """Do a charged attack (if enough energy)."""
     if attacker.energy >= -move.energy_delta:
         damage = move.damage(target)
         # always shield if the damage would kill the target
         shield = target.hp <= damage
         move.attack(target, shield=shield, damage=damage)
-        target.cooldown -= 1
-        return
+        return True
 
 
 def best_move(attacker, target):
@@ -56,16 +57,30 @@ def combat(p1, attack_p1, p2, attack_p2):
 
     turn = 0
     while True:
+        turn += 1
         logging.debug("turn %d:", turn)
-        attack(p1, p2, attack_p1)
+
+        attack_fast(p1, p2)
         if p2.hp <= 0:
             logging.debug("%s wins with %0.1f hp", p1.name, p1.hp)
             return p1
-        attack(p2, p1, attack_p2)
+
+        attack_fast(p2, p1)
         if p1.hp <= 0:
             logging.debug("%s wins with %0.1f hp", p2.name, p2.hp)
             return p2
-        turn += 1
+
+        if attack_charged(p1, p2, attack_p1):
+            if p2.hp <= 0:
+                logging.debug("%s wins with %0.1f hp", p1.name, p1.hp)
+                return p1
+            # p1 did a charged attack, and p2 got another fast hit so this turn ends
+            continue
+
+        attack_charged(p2, p1, attack_p2)
+        if p1.hp <= 0:
+            logging.debug("%s wins with %0.1f hp", p2.name, p2.hp)
+            return p2
 
 
 def rate(args):
