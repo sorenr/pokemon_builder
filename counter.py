@@ -29,19 +29,18 @@ def attack_charged(attacker, target, move):
         return True
 
 
-def best_move(attacker, target):
+def best_move_ttk(attacker, target, shields=1):
     """Pick the best attack for the target."""
-    if len(attacker.charged) == 1:
-        return attacker.charged[0]
     move_best = None
-    dpe_best = None
-    for move in attacker.charged:
-        damage = move.damage(target)
-        dpe = damage/-move.energy_delta
-        if dpe_best is None or dpe_best < dpe:
-            move_best = move
-            dpe_best = dpe
-    return move_best
+    metric_best = None
+    attacker.reset()
+    target.reset()
+    for move_charged in attacker.charged:
+        ttk = attacker.ttk(attacker.fast, move_charged, target, shields=shields)
+        if metric_best is None or ttk < metric_best:
+            move_best = move_charged
+            metric_best = ttk
+    return move_best, metric_best
 
 
 def combat(p1, attack_p1, p2, attack_p2):
@@ -86,11 +85,12 @@ def combat(p1, attack_p1, p2, attack_p2):
 
 class Ranker():
     """Copute fitness for a set of targets."""
-    def __init__(self, gm, opponent_names, max_cp=None):
+    def __init__(self, gm, opponent_names, shields, max_cp=None):
         self.gm = gm
         self.max_cp = max_cp
         self.p = pokemon.Pokemon(gm)
         self.opponents = []
+        self.shields = shields
 
         # generate the target list to battle against all possible challengers
         for opponent_name in [x.upper() for x in opponent_names]:
@@ -143,10 +143,8 @@ class Ranker():
                 self.p.update(fast=fast, charged=charged)
                 results_t = []
                 for opponent in self.opponents:
-                    p_best = best_move(self.p, opponent)
-                    o_best = best_move(opponent, self.p)
-                    ttk_o = self.p.ttk(self.p.fast, p_best, opponent)
-                    ttk_p = opponent.ttk(opponent.fast, o_best, self.p)
+                    _, ttk_o = best_move_ttk(self.p, opponent, shields=self.shields)
+                    _, ttk_p = best_move_ttk(opponent, self.p, shields=self.shields)
                     result = ttk_p - ttk_o
                     results_t.append(result)
                 results.setdefault(tuple(results_t), []).append(str(self.p))
@@ -161,8 +159,16 @@ def chunk(lst, n):
         yield lst[i:i + n]
 
 
-def counter(gm, opponent_names, max_cp=None, threads=1):
-    ranker = Ranker(gm, opponent_names, max_cp=max_cp)
+def aggregate_results(results, result_t):
+    for bouts, monstas in result_t.items():
+        # sum sqrt because for multiple targets winning one
+        # by a lot matters less than winning all by a little
+        rating = sum([x > 0 and pow(x, 0.5) for x in bouts])
+        results.setdefault(rating, {}).setdefault(bouts, []).extend(monstas)
+
+
+def counter(gm, opponent_names, shields, max_cp=None, threads=1):
+    ranker = Ranker(gm, opponent_names, shields=shields, max_cp=max_cp)
 
     team_names = list(gm.pokemon.keys())
     # smeargle has too many move combinations
@@ -171,21 +177,17 @@ def counter(gm, opponent_names, max_cp=None, threads=1):
     rank_func = ranker.rank_ttk
     # rank_func = ranker.rank_combat
 
+    results = {}
     if threads == 1:
         # rank the opponents in a single thread
-        results = rank_func(team_names)
+        aggregate_results(results, rank_func(team_names))
     else:
-        results = {}
         # divide the name list into job-sized chunks
         chunk_size = int(len(team_names) / threads)
         team_name_chunks = chunk(team_names, chunk_size)
         pool = multiprocessing.Pool(threads)
         for result_t in pool.imap_unordered(rank_func, team_name_chunks):
-            for bouts, monstas in result_t.items():
-                # sum sqrt because for multiple targets winning one
-                # by a lot matters less than winning all by a little
-                rating = sum([x > 0 and pow(x, 0.5) for x in bouts])
-                results.setdefault(rating, {}).setdefault(bouts, []).extend(monstas)
+            aggregate_results(results, result_t)
 
     for rank in sorted(results.keys()):
         bouts_h = results[rank]
@@ -273,6 +275,7 @@ if __name__ == "__main__":
     parser.add_argument("-v", dest="verbose", help="verbose output", action="store_true")
     parser.add_argument("-t", dest="threads", type=int, default=multiprocessing.cpu_count())
     parser.add_argument("--cp", dest="max_cp", type=int, help="cp limit")
+    parser.add_argument("--shields", dest="shields", type=int, default=1, help="shields per bout")
     parser.add_argument("opponents", nargs="*", help="opponents to counter")
     args = parser.parse_args()
 
@@ -287,6 +290,6 @@ if __name__ == "__main__":
 
     if args.opponents:
         gm = game_master.GameMaster()
-        counter(gm, args.opponents, max_cp=args.max_cp, threads=args.threads)
+        counter(gm, args.opponents, shields=args.shields, max_cp=args.max_cp, threads=args.threads)
     else:
         unittest.main()
