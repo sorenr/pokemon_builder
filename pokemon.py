@@ -8,7 +8,6 @@ import enum
 import time
 import json
 import os
-import fnmatch
 import math
 
 import game_master
@@ -63,16 +62,10 @@ class Move():
         self.is_fast = self.name.endswith(Move._FSUFFIX)
         if self.is_fast:
             self.bonus_atk = self.pokemon.settings.get('fastAttackBonusMultiplier', 1)
+            self.is_legacy = self.name not in self.pokemon.data.get(game_master.GameMaster.K_FAST)
         else:
             self.bonus_atk = self.pokemon.settings.get('chargeAttackBonusMultiplier', 1)
-
-        legacy = game_master.GameMaster._LEGACY.get(self.name, [])
-        for pattern in legacy:
-            if fnmatch.fnmatch(self.pokemon.name, pattern):
-                self.is_legacy = True
-                break
-        else:
-            self.is_legacy = False
+            self.is_legacy = self.name not in self.pokemon.data.get(game_master.GameMaster.K_CHARGED)
 
         self.power = self.data.get('power', 0)
         if self.type in self.pokemon.type:
@@ -114,12 +107,11 @@ class Move():
             if shield and target.shields > 0:
                 target.shields -= 1
                 damage = 1
-            target.cooldown += 2
 
         # apply the attack damage
         target.hp -= damage
         self.pokemon.energy += self.energy_delta
-        self.pokemon.cooldown -= self.cooldown
+        self.pokemon.cooldown -= 1 + self.cooldown
         logging.debug("%s-%s->%s dmg=%d hp=%0.1f->%0.1f en=%0.1f->%0.1f",
                       self.pokemon.name, self.name, target.name, damage,
                       hp_old, target.hp, energy_old, self.pokemon.energy)
@@ -295,13 +287,13 @@ class Pokemon():
 
         # A move's stats depend on its pokemon, so set the pokemon stats before setting its moves.
         if fast is VAL.RANDOM:
-            fast = random.choice(self.possible_fast)
+            fast = random.choice(list(self.possible_fast))
         if fast not in [VAL.DONT_SET, VAL.OPTIMAL]:
             self.fast = isinstance(fast, Move) and fast or Move(self, fast)
 
         if charged is VAL.RANDOM:
             # pick 1 or 2 charged attacks
-            p_charged = self.possible_charged.copy()
+            p_charged = list(self.possible_charged)
             charged = [random.choice(p_charged)]
             if len(p_charged) > 1 and random.random() > 0.5:
                 p_charged.remove(charged[0])
