@@ -105,10 +105,15 @@ class GameMaster():
     _re_combat_move = re.compile(r'COMBAT_V(\d+)_MOVE_(.+)')
 
     K_FAST = "quickMoves"
+    K_FAST_ELITE = "eliteQuickMove"
+    K_FAST_LEGACY = "legacyQuickMove"
+    K_FAST_SUFFIX = "_FAST"  # fast move suffix
     K_CHARGED = "cinematicMoves"
+    K_CHARGED_ELITE = "eliteCinematicMove"
+    K_CHARGED_LEGACY = "legacyCinematicMove"
     K_SMEARGLE = "SMEARGLE"
     K_SMEARGLE_MOVES = "SMEARGLE_MOVES_SETTINGS"
-    K_NORMAL_SUFFIX = "_NORMAL" # Normal suffix
+    K_NORMAL_SUFFIX = "_NORMAL"  # Normal suffix
 
     K_BONUS_DEF = "defenseBonusMultiplier"
 
@@ -377,7 +382,7 @@ class GameMaster():
             else:
                 logging.warning("%s can't find %s", name_l, name_s)
 
-        # add legacy moves to the lists of possible moves
+        # add legacy moves to the lists of elite tm-able moves
         legacy_fast = 0
         legacy_charged = 0
         all_moves = set(self.moves_combat.keys())
@@ -390,19 +395,27 @@ class GameMaster():
                 if not matches:
                     raise Exception("No pokemon match %s:%s", move, pattern)
                 for match in matches:
-                    if move.endswith("_FAST"):
-                        if move in self.pokemon[match]["quickMoves"]:
+                    if move.endswith(GameMaster.K_FAST_SUFFIX):
+                        if move in self.pokemon[match][GameMaster.K_FAST]:
+                            # warn if our regular charged table already has this "legacy" move
                             logging.warning("%s already has %s", match, move)
+                        elif move in self.pokemon[match].get(GameMaster.K_FAST_ELITE, []):
+                            # skip if our Elite TM table already has this legacy move
+                            continue
                         else:
                             legacy_fast += 1
                             logging.debug("%d %s legacy %s", legacy_fast, match, move)
-                            self.pokemon[match]["quickMoves"].append(move)
-                    elif move in self.pokemon[match]["cinematicMoves"]:
+                            self.pokemon[match].setdefault(GameMaster.K_FAST_LEGACY, []).append(move)
+                    elif move in self.pokemon[match][GameMaster.K_CHARGED]:
+                        # warn if our regular charged table already has this "legacy" move
                         logging.warning("%s already has %s", match, move)
+                    elif move in self.pokemon[match].get(GameMaster.K_CHARGED_ELITE, []):
+                        # skip if our Elite TM table already has this legacy move
+                        continue
                     else:
                         legacy_charged += 1
                         logging.debug("%d %s legacy %s", legacy_charged, match, move)
-                        self.pokemon[match]["cinematicMoves"].append(move)
+                        self.pokemon[match].setdefault(GameMaster.K_CHARGED_LEGACY, []).append(move)
         logging.info("added %d fast, %d charged legacy moves", legacy_fast, legacy_charged)
 
         # Add Smeargle's moves
@@ -443,12 +456,18 @@ class GameMaster():
     def possible_fast(self, name):
         """Return a tuple of fast moves for this pokemon."""
         pdata = self.pokemon[name]
-        return pdata.get(GameMaster.K_FAST, [])
+        fast = pdata.get(GameMaster.K_FAST)
+        fast_elite = pdata.get(GameMaster.K_FAST_ELITE, [])
+        fast_legacy = pdata.get(GameMaster.K_FAST_LEGACY, [])
+        return set(fast + fast_elite + fast_legacy)
 
     def possible_charged(self, name):
         """Return a tuple of charged) moves for this pokemon."""
         pdata = self.pokemon[name]
-        return pdata.get(GameMaster.K_CHARGED, [])
+        charged = pdata.get(GameMaster.K_CHARGED)
+        charged_elite = pdata.get(GameMaster.K_CHARGED_ELITE, [])
+        charged_legacy = pdata.get(GameMaster.K_CHARGED_LEGACY, [])
+        return set(charged + charged_elite + charged_legacy)
 
     def move_combinations(self, name, r=2):
         """Generate all possible combinations of fast/charged moves for this pokemon."""
