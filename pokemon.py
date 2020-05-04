@@ -351,6 +351,20 @@ class Pokemon():
                 self.iv_stamina == b.iv_stamina and
                 self.level == b.level)
 
+    def __iter__(self):
+        """Convert this Pokemon into a list or tuple."""
+        vals = (
+            self.name,
+            self.iv_attack,
+            self.iv_defense,
+            self.iv_stamina,
+            self.level,
+            self.fast.name,
+            tuple(sorted([x.name for x in self.charged]))
+        )
+        for i in vals:
+            yield i
+
     def stat_product(self, full_precision=False):
         """Return the stat product, a useful metric for optimizing IVs."""
         # https://gostadium.club/pvp/iv
