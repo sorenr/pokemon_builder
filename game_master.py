@@ -443,9 +443,9 @@ class GameMaster():
         self._cp_multiplier = tuple(cpm_table)
 
     def cp_multiplier(self, level):
-        """Return the CP multiplier for levels [0.0 .. 40.0]"""
+        """Return the CP multiplier for levels [1.0 .. 41.0]"""
         i = round(2 * level) - 2
-        return self._cp_multiplier[i]
+        return self._cp_multiplier[int(i)]
 
     def effect(self, attack_type, target_types):
         effect = 1.0
