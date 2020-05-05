@@ -9,6 +9,7 @@ import time
 import json
 import os
 import math
+import numpy
 
 import game_master
 
@@ -142,6 +143,7 @@ class Move():
 class Cache(dict):
     """A dict which persists."""
     def __init__(self, path):
+        self.dirty = False
         self.path = path
         try:
             with open(path) as fd:
@@ -181,6 +183,7 @@ class Cache(dict):
         with open(newpath, 'w') as fd:
             json.dump(self.write_prep(self), fd, sort_keys=True)
         logging.info("Wrote %d entries to %s", len(self), self.path)
+        self.dirty = False
         return newpath
 
 
@@ -199,7 +202,12 @@ class Pokemon():
                  level=VAL.RANDOM,
                  fast=VAL.RANDOM,
                  charged=VAL.RANDOM,
-                 context=CONTEXT.COMBAT):
+                 context=CONTEXT.COMBAT,
+                 iv_cache=OPTIMAL_IV):
+        if Pokemon.iv_cache is None:
+            Pokemon.iv_cache = Cache(iv_cache)
+            if len(Pokemon.iv_cache) > 0:
+                logging.info("opened cache %s with %d entries", iv_cache, len(Pokemon.iv_cache))
         self.gm = gm
         self.update(name=name, attack=attack, defense=defense,
                     stamina=stamina, level=level,
@@ -377,70 +385,166 @@ class Pokemon():
             sp *= int(self.stamina)
             return int(sp + 0.5)  # round to the nearest int
 
-    def write_iv_cache(self):
-        """Write the IV cache if we've dirtied it."""
-        if self.iv_cache_dirty:
-            self.iv_cache.write()
+    def optimize_iv_serial(self, cp_max, full_precision=True):
+        """Optimize IVs one combination at a time."""
+        sp_optimal = None
+        cp_optimal = None
+        optimal = []
+        steps = range(2, 1 + 2 * self.gm.K_LEVEL_MAX)
+        steps = [x * 0.5 for x in steps]
+        for atk in range(0, 16):
+            for defn in range(0, 16):
+                for sta in range(0, 16):
+                    for lev in steps:
+                        self.update(attack=atk, defense=defn, stamina=sta, level=lev)
+                        cp_t = self.cp()
+                        # int truncation means cp=2500.99 still counts as 2500
+                        if int(cp_t) > int(cp_max):
+                            break
+                        sp_t = self.stat_product(full_precision=full_precision)
+                        if (sp_optimal is None or sp_t > sp_optimal or
+                                (sp_t == sp_optimal and cp_t > cp_optimal)):
+                            sp_optimal = sp_t
+                            cp_optimal = cp_t
+                            optimal = [(atk, defn, sta, lev, cp_t, sp_t)]
+                        elif sp_t == sp_optimal:
+                            optimal.append((atk, defn, sta, lev, cp_t, sp_t))
+        return optimal
 
-    def optimize_iv(self, max_cp=None, iv_cache=OPTIMAL_IV):
+    def optimize_iv_simd(self, max_cp, full_precision=True, dtype=numpy.float32):
+        """Compute the optimal IV stat product using scipy arrays."""
+        aa_iv = []
+        da_iv = []
+        sa_iv = []
+        la = []
+        cpma = []
+
+        # create level/IV combinations
+        # FIXME: this set-up still takes half the time
+        for l in [x * 0.5 for x in range(2, 83)]:
+            cpm = self.gm.cp_multiplier(l)
+            for a in range(0, 16):
+                for d in range(0, 16):
+                    for s in range(0, 16):
+                        aa_iv.append(a)
+                        da_iv.append(d)
+                        sa_iv.append(s)
+                        la.append(l)
+                        cpma.append(cpm)
+
+        cpma = numpy.array(cpma, dtype=dtype)
+
+        # calculate base attack
+        aa_iv = numpy.array(aa_iv, dtype=numpy.int8)
+        aa = numpy.array(aa_iv, dtype=dtype)
+        aa += self.data['stats']['baseAttack']
+        aa *= cpma
+
+        # calculate base defense
+        da_iv = numpy.array(da_iv, dtype=numpy.int8)
+        da = numpy.array(da_iv, dtype=dtype)
+        da += self.data['stats']['baseDefense']
+        da *= cpma
+
+        # calculate base stamina
+        sa_iv = numpy.array(sa_iv, dtype=numpy.int8)
+        sa = numpy.array(sa_iv, dtype=dtype)
+        sa += self.data['stats']['baseStamina']
+        sa *= cpma
+
+        # compute CPs
+        cpa = numpy.multiply(aa, numpy.power(da, 0.5))
+        cpa *= numpy.power(sa, 0.5)
+        cpa *= 0.1
+
+        # extract the level/IV combinations under the CP limit
+        aa_iv = numpy.extract(cpa < max_cp + 1, aa_iv)
+        da_iv = numpy.extract(cpa < max_cp + 1, da_iv)
+        sa_iv = numpy.extract(cpa < max_cp + 1, sa_iv)
+        aa = numpy.extract(cpa < max_cp + 1, aa)
+        da = numpy.extract(cpa < max_cp + 1, da)
+        sa = numpy.extract(cpa < max_cp + 1, sa)
+        la = numpy.extract(cpa < max_cp + 1, la)
+        cpma = numpy.extract(cpa < max_cp + 1, cpma)
+        cpa = numpy.extract(cpa < max_cp + 1, cpa)
+
+        # compute stat product
+        if full_precision:
+            sp = aa * da * sa
+        else:
+            # need full precision to avoid rounding errors below
+            sp = numpy.multiply(aa, da, dtype=numpy.float64)
+            sp *= sa.astype(dtype=numpy.int16)
+            sp = numpy.around(sp)  # round to the nearest int
+
+        # find the max stat product
+        sp_max = sp.max()
+        # find the indices corresponding to this product
+        i_max = numpy.where(sp_max == sp)[0]
+        # find the max CP within the highest stat products
+        cp_max = numpy.max(numpy.extract(sp_max == sp, cpa))
+        if full_precision:
+            sp_max = float(sp_max)
+        else:
+            sp_max = int(sp_max)
+        optimal = []
+        for i in i_max:
+            if cpa[i] == cp_max:
+                o = (int(aa_iv[i]),
+                    int(da_iv[i]),
+                    int(sa_iv[i]),
+                    float(la[i]),
+                    float(cpa[i]),
+                    sp_max)
+                optimal.append(o)
+        return optimal
+
+    def optimize_iv(self, cp_max=None, simd=True, full_precision=True):
         """Optimize the IV stat product & level for a given CP cap."""
-        # static cache for all instances of a pokemon
-        if Pokemon.iv_cache is None:
-            Pokemon.iv_cache = Cache(iv_cache)
-            self.iv_cache_dirty = False
-            if Pokemon.iv_cache:
-                logging.info("opened cache %s with %d entries", iv_cache, len(Pokemon.iv_cache))
-
-        o = Pokemon.iv_cache.get(self.name, {}).get(str(max_cp))
-        if o is not None:
-            # update to the optimal cached stats
-            self.update(attack=o[0], defense=o[1], stamina=o[2], level=o[3])
-            # return the cached value
-            return o
+        try:
+            o = Pokemon.iv_cache[self.name][cp_max]
+            if o is not None:
+                # update to the optimal cached stats
+                self.update(attack=o[0], defense=o[1], stamina=o[2], level=o[3])
+                # return the cached value
+                return o
+        except KeyError:
+            pass
 
         # return max CP if we have no limit, or max IV is below the cap
         self.update(attack=15, defense=15, stamina=15, level=41)
         cp = self.cp()
-        if max_cp is None or cp <= max_cp:
-            max_cp_s = max_cp is None and "INF" or str(max_cp)
-            logging.debug("15/15/15/41=%d, under the %s IV cap", cp, max_cp_s)
-            o = [15, 15, 15, 41, self.cp(), self.stat_product(full_precision=True)]
-            Pokemon.iv_cache.setdefault(self.name, {})[max_cp] = o
-            self.iv_cache_dirty = True
+        o = [15, 15, 15, 41, self.cp(), self.stat_product(full_precision=full_precision)]
+        if cp_max is None:
+            return o
+        if cp <= cp_max:
+            logging.debug("%s 15/15/15/41=%d, under the %s IV cap", self.name, cp, cp_max)
+            Pokemon.iv_cache.setdefault(self.name, {})[cp_max] = o
+            Pokemon.iv_cache.dirty = True
             return o
 
         # return False if the minimum IV is above the limit
         self.update(attack=0, defense=0, stamina=0, level=1)
         cp = self.cp()
-        sp = None
-        optimal = []
-        if cp > max_cp:
-            logging.debug("0/0/0/1=%d exceeds the %d IV cap", cp, max_cp)
-            Pokemon.iv_cache.setdefault(self.name, {})[max_cp] = False
-            self.iv_cache_dirty = True
+        if cp_max is not None and cp > cp_max:
+            logging.debug("%s 0/0/0/1=%d exceeds the %d IV cap", self.name, cp, cp_max)
+            Pokemon.iv_cache.setdefault(self.name, {})[cp_max] = False
+            Pokemon.iv_cache.dirty = True
             return False
+
         # find the optimal IV/level combination
-        for a in range(0, 16):
-            for d in range(0, 16):
-                for s in range(0, 16):
-                    for l in [x * 0.5 for x in range(2, 82)]:
-                        self.update(attack=a, defense=d, stamina=s, level=l)
-                        t_cp = self.cp()
-                        if t_cp > max_cp:
-                            break
-                        t_sp = self.stat_product(full_precision=True)
-                        if sp is None or t_sp > sp:
-                            sp = t_sp
-                            optimal = [(a, d, s, l, t_cp, t_sp)]
-                        elif t_sp == sp:
-                            optimal.append((a, d, s, l, t_cp, t_sp))
+        if simd:
+            optimal = self.optimize_iv_simd(cp_max=cp_max, full_precision=full_precision)
+        else:
+            optimal = self.optimize_iv_serial(cp_max=cp_max, full_precision=full_precision)
+
         if optimal:
             o = optimal[0]
             # update the stats with the optimal values
             self.update(attack=o[0], defense=o[1], stamina=o[2], level=o[3])
             # cache the result for the next time
-            Pokemon.iv_cache.setdefault(self.name, {})[max_cp] = o
-            self.iv_cache_dirty = True
+            Pokemon.iv_cache.setdefault(self.name, {})[cp_max] = o
+            Pokemon.iv_cache.dirty = True
             return o
         return False
 
@@ -673,6 +777,45 @@ class PokemonUnitTest(unittest.TestCase):
                           context=CONTEXT.COMBAT)
         self.assertEqual(30, lucario.ttk(fast=lucario.fast, charged=lucario.charged[0], target=snorlax, shields=1))
         self.assertEqual(38, snorlax.ttk(fast=snorlax.fast, charged=snorlax.charged[0], target=lucario, shields=1))
+
+    def assertEqualParts(self, tuple1, tuple2, delta=None):
+        """Like assertTupleEqual except special rules for float members."""
+        self.assertEqual(len(tuple1), len(tuple2))
+        for val1, val2 in zip(tuple1, tuple2):
+            self.assertEqual(type(val1), type(val2))
+            if isinstance(val1, float):
+                self.assertAlmostEqual(val1, val2, delta=delta)
+            else:
+                self.assertEqual(val1, val2)
+
+    def test_iv_simd(self):
+        """Check that iv_serial and iv_simd calculate the same values."""
+        logging.info("iv serial/simd tests")
+        t_simd = 0
+        t_serial = 0
+        for i in range(3):
+            p = Pokemon(self.gm, attack=0, defense=0, stamina=0, level=1)
+
+            t_serial -= time.time()
+            oo = p.optimize_iv_serial(cp_max=2500, full_precision=True)[0]
+            t_serial += time.time()
+            t_simd -= time.time()
+            os = p.optimize_iv_simd(cp_max=2500, full_precision=True)[0]
+            t_simd += time.time()
+            logging.info("iv_serial %s %s True", p.name, oo)
+            logging.info("  iv_simd %s %s True", p.name, os)
+            self.assertEqualParts(oo, os, delta=3)
+
+            t_serial -= time.time()
+            oo = p.optimize_iv_serial(cp_max=2500, full_precision=False)[0]
+            t_serial += time.time()
+            t_simd -= time.time()
+            os = p.optimize_iv_simd(cp_max=2500, full_precision=False)[0]
+            t_simd += time.time()
+            logging.info("iv_serial %s %s True", p.name, oo)
+            logging.info("  iv_simd %s %s True", p.name, os)
+            self.assertEqualParts(oo, os, delta=3)
+        logging.info("SIMD %0.1fx faster than serial", t_serial / t_simd)
 
 
 if __name__ == "__main__":
