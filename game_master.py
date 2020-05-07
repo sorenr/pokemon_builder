@@ -12,6 +12,7 @@ import enum
 import itertools
 import difflib
 import fnmatch
+import pokemon
 
 
 """
@@ -114,6 +115,7 @@ class GameMaster():
     K_SMEARGLE = "SMEARGLE"
     K_SMEARGLE_MOVES = "SMEARGLE_MOVES_SETTINGS"
     K_NORMAL_SUFFIX = "_NORMAL"  # Normal suffix
+    K_ID_UNIQUE = "uniqueId"
 
     K_BONUS_DEF = "defenseBonusMultiplier"
 
@@ -474,6 +476,40 @@ class GameMaster():
         for fast in self.possible_fast(name):
             for charged in itertools.combinations(self.possible_charged(name), r):
                 yield fast, charged
+
+    def superset_pokemon(self, names=None):
+        """
+            Return a list of "superset" pokemon having unique move sets.
+            TYRANITAR_PURIFIED is a superset of TYRANITAR: same stats and also has RETURN.
+        """
+        if names is None:
+            names = self.pokemon.keys()
+        uniques = {}
+        for new_name in sorted(names):
+            new_pokemon = pokemon.Pokemon(self, new_name)
+            should_set = True
+            if new_pokemon.name_unique not in uniques:
+                # make a new record if this type isn't there
+                uniques[new_pokemon.name_unique] = {new_pokemon.name: new_pokemon}
+                continue
+            for variant_name, variant_pokemon in uniques[new_pokemon.name_unique].items():
+                superset = new_pokemon.issuperset(variant_pokemon)
+                # if the two are functionally identical...
+                if superset == 1:
+                    # if the new one has a funny name...
+                    for avoid in ('_COPY_', '_FALL_', '_VS_'):
+                        if avoid in new_name:
+                            # ... ignore the one with the funny name
+                            should_set = False
+                            break
+                if superset and should_set:
+                    # delete the subset pokemon; the superset replaces it
+                    del uniques[new_pokemon.name_unique][variant_name]
+                    break
+            if should_set:
+                uniques[new_pokemon.name_unique][new_name] = new_pokemon
+
+        return [x.keys() for x in uniques.values()]
 
     def report(self):
         """Write a summary of the data we've received."""

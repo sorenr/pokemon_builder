@@ -243,6 +243,7 @@ class Pokemon():
                 self.data = self.gm.pokemon[self.name]
             except KeyError:
                 raise game_master.PokemonKeyError(self.name, self.gm.pokemon)
+            self.name_unique = self.data[game_master.GameMaster.K_ID_UNIQUE]
             self.stats = self.data['stats']
             self.type = {self.data['type1'], self.data.get('type2')}
             self.type = {game_master.Types[x] for x in self.type if x is not None}
@@ -437,19 +438,19 @@ class Pokemon():
         # calculate base attack
         aa_iv = numpy.array(aa_iv, dtype=numpy.int8)
         aa = numpy.array(aa_iv, dtype=dtype)
-        aa += self.data['stats']['baseAttack']
+        aa += self.stats['baseAttack']
         aa *= cpma
 
         # calculate base defense
         da_iv = numpy.array(da_iv, dtype=numpy.int8)
         da = numpy.array(da_iv, dtype=dtype)
-        da += self.data['stats']['baseDefense']
+        da += self.stats['baseDefense']
         da *= cpma
 
         # calculate base stamina
         sa_iv = numpy.array(sa_iv, dtype=numpy.int8)
         sa = numpy.array(sa_iv, dtype=dtype)
-        sa += self.data['stats']['baseStamina']
+        sa += self.stats['baseStamina']
         sa *= cpma
 
         # compute CPs
@@ -627,6 +628,32 @@ class Pokemon():
                     break
         # update to the best fast/charged moves
         self.update(fast=fast, charged=charged)
+
+    def issuperset(self, other):
+        """return whether 'self' is functionally the same, or has extra moves."""
+
+        # if it's not the same stats and type it can't be a superset
+        if self.stats != other.stats or self.type != other.type:
+            return 0
+
+        bonuses = (game_master.GameMaster.K_BONUS_DEF,
+                   game_master.GameMaster.K_SHADOW_BONUS_DEF,
+                   game_master.GameMaster.K_SHADOW_BONUS_ATK)
+        for bonus in bonuses:
+            if self.data.get(bonus, 1.0) != other.data.get(bonus, 1.0):
+                return 0
+
+        if self.possible_fast == other.possible_fast and self.possible_charged == other.possible_charged:
+            # identical supersets
+            return 1
+
+        if not self.possible_fast.issuperset(other.possible_fast):
+            return 0
+        if not self.possible_charged.issuperset(other.possible_charged):
+            return 0
+
+        # is a superset containing extra items
+        return 2
 
 
 class PokemonUnitTest(unittest.TestCase):
