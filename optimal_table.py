@@ -40,6 +40,8 @@ def find_optimal_multi(iv_cache=pokemon.OPTIMAL_IV, threads=None):
     iv_cache = pokemon.Cache(iv_cache)
     # Find which pokemon are not in the list
     missing = [x for x in GM.pokemon.keys() if x not in iv_cache]
+    if npokemon is not None:
+        missing = missing[:npokemon]
     print("Computing optimal IVs for", len(missing), "pokemon using", threads, threads > 1 and "threads" or "thread")
     try:
         if threads == 1:
@@ -64,6 +66,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Retrieve and parse a GAME_MASTER.json file')
     parser.add_argument("-v", dest="verbose", help="verbose output", action="store_true")
     parser.add_argument("-t", dest="threads", help="threads", type=int, default=multiprocessing.cpu_count())
+    parser.add_argument("-n", dest="npokemon", help="number of pokemon to optimize", type=int)
     parser.add_argument("-o", dest="output", help="output JSON file", default=pokemon.OPTIMAL_IV)
     args = parser.parse_args()
 
@@ -77,7 +80,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=log_level, format=log_format)
 
     GM = game_master.GameMaster()
-    optimal = find_optimal_multi(args.output, threads=args.threads)
+    optimal = find_optimal_multi(args.output, threads=args.threads, npokemon=args.npokemon)
 
     # reorder by highest stat product
     best = {}
