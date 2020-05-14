@@ -10,6 +10,7 @@ import json
 import os
 import math
 import numpy
+import re
 
 import game_master
 
@@ -203,12 +204,30 @@ class Pokemon():
                  fast=VAL.RANDOM,
                  charged=VAL.RANDOM,
                  context=CONTEXT.COMBAT,
+                 state=None,
                  iv_cache=OPTIMAL_IV):
         if Pokemon.iv_cache is None:
             Pokemon.iv_cache = Cache(iv_cache)
             if len(Pokemon.iv_cache) > 0:
                 logging.info("opened cache %s with %d entries", iv_cache, len(Pokemon.iv_cache))
         self.gm = gm
+
+        # string describing the state of a pokemon
+        # CHARMANDER:EMBER_FAST,FLAMETHROWER+FLAME_BURST
+        if type(state) == str:
+            parts = re.split(r'[:,+]', state)
+            name, charged_s = parts[0], parts[1:]
+            fast_s = [x for x in parts if x.endswith("_FAST")]
+            if fast_s:
+                assert 1 == len(fast_s)
+                fast = fast_s[0]
+                charged_s.remove(fast)
+            if charged_s:
+                charged = charged_s
+
+        if type(state) == tuple:
+            name, attack, defense, stamina, level, fast, charged = state
+
         self.update(name=name, attack=attack, defense=defense,
                     stamina=stamina, level=level,
                     fast=fast, charged=charged,
@@ -334,6 +353,16 @@ class Pokemon():
         self.buff_defense = 4
         self.cooldown = 0
         self.energy = 0
+
+    def copy(self):
+        return Pokemon(self.gm,
+                       name=self.name,
+                       attack=self.iv_attack,
+                       defense=self.iv_defense,
+                       stamina=self.iv_stamina,
+                       level=self.level,
+                       fast=self.fast.name,
+                       charged=[x.name for x in self.charged])
 
     def __str__(self):
         """Return a human-readable string representation of the pokemon."""
@@ -843,6 +872,30 @@ class PokemonUnitTest(unittest.TestCase):
             logging.info("  iv_simd %s %s True", p.name, os)
             self.assertEqualParts(oo, os, delta=3)
         logging.info("SIMD %0.1fx faster than serial", t_serial / t_simd)
+
+    def test_state(self):
+        # make a pokemon
+        p_old = Pokemon(self.gm)
+
+        # make a state description
+        state = "{0:s}:{1:s},{2:s}".format(
+            p_old.name,
+            p_old.fast.name,
+            "+".join(x.name for x in p_old.charged)
+        )
+
+        # create new pokemon with that state description
+        p_new = Pokemon(
+            gm=self.gm,
+            state=state,  # state defines name/moves
+            attack=p_old.iv_attack,
+            defense=p_old.iv_defense,
+            stamina=p_old.iv_stamina,
+            level=p_old.level
+        )
+
+        # they should be the same
+        self.assertEqual(p_old, p_new)
 
 
 if __name__ == "__main__":
