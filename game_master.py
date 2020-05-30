@@ -449,6 +449,18 @@ class GameMaster():
         i = round(2 * level) - 2
         return self._cp_multiplier[int(i)]
 
+    def cpm_level(self, cpm):
+        """Return the level corresponding to this CP multiplier."""
+        diff_last = 9999
+        for i, x in enumerate(self._cp_multiplier):
+            diff = abs(x - cpm)
+            if diff < diff_last:
+                diff_last = diff
+            else:
+                i -= 1
+                break
+        return (i + 2) / 2
+
     def effect(self, attack_type, target_types):
         effect = 1.0
         for ttype in target_types:

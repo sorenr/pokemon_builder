@@ -195,6 +195,7 @@ class Pokemon():
     fast = None
     charged = []
     iv_cache = None
+    _iv_setup = False
 
     def __init__(self, gm,
                  name=VAL.RANDOM,
@@ -442,92 +443,74 @@ class Pokemon():
                             optimal.append((atk, defn, sta, lev, cp_t, sp_t))
         return optimal
 
-    def optimize_iv_simd(self, max_cp, full_precision=True, dtype=numpy.float32):
+    def optimize_iv_simd(self, cp_max, full_precision=True):
         """Compute the optimal IV stat product using scipy arrays."""
-        aa_iv = []
-        da_iv = []
-        sa_iv = []
-        la = []
-        cpma = []
+        # make static arrays if it's the first time
+        if not Pokemon._iv_setup:
+            ivs = numpy.arange(16, dtype=numpy.float32)
+            cpm = numpy.array([self.gm.cp_multiplier(x * 0.5) for x in range(2, 83)])
+            Pokemon._iv_adsl = numpy.array(numpy.meshgrid(ivs, ivs, ivs, cpm)).T.reshape(-1, 4)
+            Pokemon._iv_ads = Pokemon._iv_adsl[:, 0:3]
+            Pokemon._cpm = Pokemon._iv_adsl[:, -1]
+            Pokemon._cpm = Pokemon._cpm.reshape(Pokemon._cpm.shape[0], 1)
+            Pokemon._iv_setup = True
 
-        # create level/IV combinations
-        # FIXME: this set-up still takes half the time
-        for l in [x * 0.5 for x in range(2, 83)]:
-            cpm = self.gm.cp_multiplier(l)
-            for a in range(0, 16):
-                for d in range(0, 16):
-                    for s in range(0, 16):
-                        aa_iv.append(a)
-                        da_iv.append(d)
-                        sa_iv.append(s)
-                        la.append(l)
-                        cpma.append(cpm)
+        # compute base attack/defense/stamina
+        ads = Pokemon._iv_ads + numpy.array([
+            self.stats['baseAttack'],
+            self.stats['baseDefense'],
+            self.stats['baseStamina']])
 
-        cpma = numpy.array(cpma, dtype=dtype)
+        # compute cp
+        ads *= Pokemon._cpm
 
-        # calculate base attack
-        aa_iv = numpy.array(aa_iv, dtype=numpy.int8)
-        aa = numpy.array(aa_iv, dtype=dtype)
-        aa += self.stats['baseAttack']
-        aa *= cpma
+        # 0.1 * attack * sqrt(defense) * sqrt(stamina)
+        cp = 0.1 * ads[:, 0] * numpy.prod(numpy.power(ads[:, 1:3], 0.5), axis=1)
 
-        # calculate base defense
-        da_iv = numpy.array(da_iv, dtype=numpy.int8)
-        da = numpy.array(da_iv, dtype=dtype)
-        da += self.stats['baseDefense']
-        da *= cpma
+        # extract cp < cp_max
+        i_good = numpy.extract(cp < cp_max + 1, numpy.arange(len(cp)))
+        adsl = Pokemon._iv_adsl[i_good]
+        ads = ads[i_good]
+        cp = cp[i_good]
 
-        # calculate base stamina
-        sa_iv = numpy.array(sa_iv, dtype=numpy.int8)
-        sa = numpy.array(sa_iv, dtype=dtype)
-        sa += self.stats['baseStamina']
-        sa *= cpma
-
-        # compute CPs
-        cpa = numpy.multiply(aa, numpy.power(da, 0.5))
-        cpa *= numpy.power(sa, 0.5)
-        cpa *= 0.1
-
-        # extract the level/IV combinations under the CP limit
-        aa_iv = numpy.extract(cpa < max_cp + 1, aa_iv)
-        da_iv = numpy.extract(cpa < max_cp + 1, da_iv)
-        sa_iv = numpy.extract(cpa < max_cp + 1, sa_iv)
-        aa = numpy.extract(cpa < max_cp + 1, aa)
-        da = numpy.extract(cpa < max_cp + 1, da)
-        sa = numpy.extract(cpa < max_cp + 1, sa)
-        la = numpy.extract(cpa < max_cp + 1, la)
-        cpma = numpy.extract(cpa < max_cp + 1, cpma)
-        cpa = numpy.extract(cpa < max_cp + 1, cpa)
-
-        # compute stat product
+        # compute stat product
         if full_precision:
-            sp = aa * da * sa
+            sp = numpy.prod(ads, axis=1)
         else:
-            # need full precision to avoid rounding errors below
-            sp = numpy.multiply(aa, da, dtype=numpy.float64)
-            sp *= sa.astype(dtype=numpy.int16)
-            sp = numpy.around(sp)  # round to the nearest int
+            # multiply defense and stamina as floats
+            sp = numpy.prod(ads[:, :2], axis=1)
+            # multiply attack cast as int
+            sp *= ads[:, 2].astype(dtype=numpy.uint16)
+            # round to the nearest number and cast as int
+            sp = numpy.around(sp).astype(numpy.uint32)
 
-        # find the max stat product
-        sp_max = sp.max()
-        # find the indices corresponding to this product
-        i_max = numpy.where(sp_max == sp)[0]
-        # find the max CP within the highest stat products
-        cp_max = numpy.max(numpy.extract(sp_max == sp, cpa))
+        # filter results with max stat product
+        i_max = numpy.nonzero(sp == numpy.max(sp))[0]
+        o = adsl[i_max]
+        cp = cp[i_max]
+        sp = sp[i_max]
+
+        # filter results with same stat product, max cp
+        i_max = numpy.nonzero(cp == numpy.max(cp))[0]
+        o = o[i_max]
+        cp = cp[i_max]
+        sp = sp[i_max]
+
         if full_precision:
-            sp_max = float(sp_max)
+            sp = [float(x) for x in sp]
         else:
-            sp_max = int(sp_max)
+            sp = [int(x) for x in sp]
+
         optimal = []
-        for i in i_max:
-            if cpa[i] == cp_max:
-                o = (int(aa_iv[i]),
-                    int(da_iv[i]),
-                    int(sa_iv[i]),
-                    float(la[i]),
-                    float(cpa[i]),
-                    sp_max)
-                optimal.append(o)
+        for i, row in enumerate(o):
+            optimal.append([
+                int(row[0]),
+                int(row[1]),
+                int(row[2]),
+                self.gm.cpm_level(row[3]),
+                float(cp[i]),
+                sp[i]
+            ])
         return optimal
 
     def optimize_iv(self, cp_max=None, simd=True, full_precision=True):
@@ -570,7 +553,8 @@ class Pokemon():
             optimal = self.optimize_iv_serial(cp_max=cp_max, full_precision=full_precision)
 
         if optimal:
-            o = optimal[0]
+            # select the first optimal result from the sorted list
+            o = sorted(optimal)[0]
             # update the stats with the optimal values
             self.update(attack=o[0], defense=o[1], stamina=o[2], level=o[3])
             # cache the result for the next time
