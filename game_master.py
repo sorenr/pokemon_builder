@@ -109,6 +109,7 @@ class GameMaster():
     K_FAST_ELITE = "eliteQuickMove"
     K_FAST_LEGACY = "legacyQuickMove"
     K_FAST_SUFFIX = "_FAST"  # fast move suffix
+    K_FAST_INFIX = "_FAST"  # fast move suffix
     K_CHARGED = "cinematicMoves"
     K_CHARGED_ELITE = "eliteCinematicMove"
     K_CHARGED_LEGACY = "legacyCinematicMove"
@@ -397,7 +398,7 @@ class GameMaster():
                 if not matches:
                     raise Exception("No pokemon match %s:%s", move, pattern)
                 for match in matches:
-                    if move.endswith(GameMaster.K_FAST_SUFFIX):
+                    if move.endswith(GameMaster.K_FAST_SUFFIX) or GameMaster.K_FAST_INFIX in move:
                         if move in self.pokemon[match][GameMaster.K_FAST]:
                             # warn if our regular charged table already has this "legacy" move
                             logging.warning("%s already has %s", match, move)
