@@ -12,8 +12,10 @@ import pokemon
 
 
 class IVOptimizer():
-    def __init__(self):
+    def __init__(self, full_precision=True, simd=True):
         self.pokemon = pokemon.Pokemon(GM)
+        self.full_precision = full_precision
+        self.simd = simd
 
     def find_optimal_proc(self, names):
         """Worker process to compute optimal IVs for 1500 and 2500 cp"""
@@ -21,7 +23,9 @@ class IVOptimizer():
         for name in names:
             self.pokemon.update(name=name)
             for mcp in [1500, 2500, None]:
-                o = self.pokemon.optimize_iv(max_cp=mcp)
+                o = self.pokemon.optimize_iv(max_cp=mcp, 
+                        full_precision=self.full_precision,
+                        simd=self.simd)
                 if o:
                     optimal.setdefault(name, {})[mcp] = o
         return optimal
@@ -34,19 +38,26 @@ def chunk(l, n):
         yield l[i: i + n]
 
 
-def find_optimal_multi(iv_cache=pokemon.OPTIMAL_IV, threads=None):
+def find_optimal_multi(iv_cache=pokemon.OPTIMAL_IV, threads=None, npokemon=None,
+                       forms=None, full_precision=True, simd=True):
     """Coordinating process to run find_optimal_proc across multiple procs"""
-    optimizer = IVOptimizer()
+    optimizer = IVOptimizer(full_precision=full_precision, simd=simd)
     iv_cache = pokemon.Cache(iv_cache)
+    # forms to optimize
+    if forms:
+        missing = forms
+    else:
+        missing = GM.pokemon.keys()
     # Find which pokemon are not in the list
-    missing = [x for x in GM.pokemon.keys() if x not in iv_cache]
+    missing = [x for x in missing if x not in iv_cache]
     if npokemon is not None:
         missing = missing[:npokemon]
     print("Computing optimal IVs for", len(missing), "pokemon using", threads, threads > 1 and "threads" or "thread")
     try:
         if threads == 1:
             # just run serially
-            pokemon.Pokemon.iv_cache.update(optimizer.find_optimal_proc(missing))
+            od = optimizer.find_optimal_proc(missing)
+            iv_cache.update(od)
         else:
             missing = chunk(missing, 20)
             with multiprocessing.Pool(threads) as pool:
@@ -68,6 +79,9 @@ if __name__ == "__main__":
     parser.add_argument("-t", dest="threads", help="threads", type=int, default=multiprocessing.cpu_count())
     parser.add_argument("-n", dest="npokemon", help="number of pokemon to optimize", type=int)
     parser.add_argument("-o", dest="output", help="output JSON file", default=pokemon.OPTIMAL_IV)
+    parser.add_argument("--serial", help="evaluate serially", action="store_true")
+    parser.add_argument("--low-precision", dest="low_precision", help="calculate CP and stat product per published tables", action="store_true")
+    parser.add_argument("forms", nargs="*", help="forms to evaluate")
     args = parser.parse_args()
 
     if args.verbose:
@@ -79,8 +93,13 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=log_level, format=log_format)
 
+    simd = not args.serial
+    full_precision = not args.low_precision
+
     GM = game_master.GameMaster()
-    optimal = find_optimal_multi(args.output, threads=args.threads, npokemon=args.npokemon)
+    optimal = find_optimal_multi(args.output, threads=args.threads, 
+                                 npokemon=args.npokemon, forms=args.forms,
+                                 full_precision=full_precision, simd=simd)
 
     # reorder by highest stat product
     best = {}
@@ -91,4 +110,4 @@ if __name__ == "__main__":
         print()
         print("CP:", cp)
         for sp in sorted(monsters.keys())[-5:]:
-            print(int(sp), monsters[sp])
+            print(sp, monsters[sp])
