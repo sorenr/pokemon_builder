@@ -370,21 +370,6 @@ class GameMaster():
             # warn about a possibly important item we're ignoring
             # logging.debug("Won't process %s", tid)
 
-        # remove POKEMON_NORMAL if POKEMON is also in the index
-        ns_len = -len(GameMaster.K_NORMAL_SUFFIX)
-        # make a list of _NORMAL pokemon
-        dups = [x for x in self.pokemon.keys() if x.endswith(GameMaster.K_NORMAL_SUFFIX)]
-        for name_l in dups:
-            name_s = name_l[:ns_len]
-            if name_s in self.pokemon:
-                diff_p = diffDict(self.pokemon[name], self.pokemon[name])
-                if diff_p is not None:
-                    # warn if POKEMON and POKEMON_NORMAL are different
-                    logging.warning("%s != %s: %s", name_l, name_s, diff_p)
-                del self.pokemon[name_l]
-            else:
-                logging.warning("%s can't find %s", name_l, name_s)
-
         # add legacy moves to the lists of elite tm-able moves
         legacy_fast = 0
         legacy_charged = 0
