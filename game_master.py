@@ -96,6 +96,49 @@ def diffDict(da, db):
     return rv
 
 
+class League():
+    """Class representing a Go Battle League."""
+    def __init__(self, gm, item):
+        self.gm = gm
+        self.cp_min = None
+        self.cp_max = None
+        self.level_max = None
+
+        self.name = item['templateId']
+        assert self.name.startswith(GameMaster.K_LEAGUE)
+        self.name = self.name[len(GameMaster.K_LEAGUE):]
+        data = item['data']['combatLeague']
+        self.leagueType = data['leagueType']
+
+        self.bannedPokemon = set(data['bannedPokemon'])
+
+        for condition in data['pokemonCondition']:
+            cpLimit = condition.get('withPokemonCpLimit')
+            if cpLimit:
+                self.cp_min = cpLimit.get('minCp', self.cp_min)
+                self.cp_max = cpLimit.get('maxCp', self.cp_max)
+            levelRange = condition.get('pokemonLevelRange')
+            if levelRange:
+                self.level_max = levelRange.get('obMaxLevel', self.level_max)
+
+    def is_eligible(self, name, cp):
+        return ((name not in self.bannedPokemon)
+                and (self.cp_max is None or cp <= self.cp_max)
+                and (self.cp_min is None or cp >= self.cp_min))
+
+    def __str__(self):
+        rv = [self.name]
+        if self.cp_min is not None:
+            rv.append("min={0:d}".format(self.cp_min))
+        if self.cp_max is not None:
+            rv.append("max={0:d}".format(self.cp_max))
+        if self.level_max is not None:
+            rv.append("≤L{0:d}".format(self.level_max))
+        if self.bannedPokemon:
+            rv.append("({0:d} banned)".format(len(self.bannedPokemon)))
+        return " ".join(rv)
+
+
 class GameMaster():
     """Class for normalizing and retrieving data from GAME_MASTER.json"""
 
@@ -119,6 +162,8 @@ class GameMaster():
     K_ID_UNIQUE = "pokemonId"
 
     K_BONUS_DEF = "defenseBonusMultiplier"
+
+    K_LEAGUE = 'COMBAT_LEAGUE_VS_SEEKER_'
 
     K_SHADOW_SUFFIX = "_SHADOW"
     K_SHADOW_BONUS_DEF = "shadowPokemonDefenseBonusMultiplier"
@@ -277,6 +322,7 @@ class GameMaster():
         self.forms = {}          # forms[form_name] = alt_forms
         self.moves_battle = {}   # moves_battle[move_name] = move_data
         self.moves_combat = {}   # moves_combat[move_name] = move_data
+        self.leagues = {}        # league info
         self._cp_multiplier = None
 
         """Reconfigure the data to be more useful."""
@@ -313,6 +359,11 @@ class GameMaster():
                 self.settings_combat_stat_stage = data['combatStatStageSettings']
                 self.buff_multiplier_attack = self.settings_combat_stat_stage['attackBuffMultiplier']
                 self.buff_multiplier_defense = self.settings_combat_stat_stage['defenseBuffMultiplier']
+
+            if tid.startswith(self.K_LEAGUE):
+                league = League(self, item)
+                assert league.name not in self.leagues
+                self.leagues[league.name] = league
 
             # add forms to self.forms
             r = self._re_forms.match(tid)
@@ -550,6 +601,11 @@ class GameMasterUnitTest(unittest.TestCase):
                 (40.0, 0.7903),
                 (41.0, 0.79530001)):
             self.assertAlmostEqual(self.gm.cp_multiplier(level), val)
+
+    def test_leagues(self):
+        for _, league in sorted(self.gm.leagues.items()):
+            print(league)
+        print()
 
 
 if __name__ == "__main__":
