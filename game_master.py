@@ -19,8 +19,8 @@ import pokemon
     Retrieve, parse, and normalize data from GAME_MASTER.json
 """
 
-GAME_MASTER_URL = "https://raw.githubusercontent.com/pokemongo-dev-contrib/pokemongo-game-master/master/versions/latest/GAME_MASTER.json"
-GAME_MASTER_PATH = GAME_MASTER_URL.rsplit('/', 1)[1]
+GAME_MASTER_URL = "https://github.com/PokeMiners/game_masters/blob/master/latest/latest.json?raw=true"
+GAME_MASTER_PATH = GAME_MASTER_URL.rsplit('/', 1)[1].rsplit('?', 1)[0]
 
 
 def get_http(url, dest):
@@ -116,7 +116,7 @@ class GameMaster():
     K_SMEARGLE = "SMEARGLE"
     K_SMEARGLE_MOVES = "SMEARGLE_MOVES_SETTINGS"
     K_NORMAL_SUFFIX = "_NORMAL"  # Normal suffix
-    K_ID_UNIQUE = "uniqueId"
+    K_ID_UNIQUE = "pokemonId"
 
     K_BONUS_DEF = "defenseBonusMultiplier"
 
@@ -262,7 +262,7 @@ class GameMaster():
         # normalize the data
         self.normalize_data()
         self.startup = time.time() - start
-        logging.info("GAME_MASTER [%s] loaded in %0.01fms", self.timestamp, 1000 * self.startup)
+        logging.info("GAME_MASTER loaded in %0.01fms", 1000 * self.startup)
 
     def _should_ignore(self, tid):
         """Should we ignore this item?"""
@@ -280,14 +280,14 @@ class GameMaster():
         self._cp_multiplier = None
 
         """Reconfigure the data to be more useful."""
-        self.timestamp = time.ctime(float(self._game_master['timestampMs']) / 1000)
+        # self.timestamp = self._game_master['timestampMs']
+        # self.timestamp = time.ctime(float(self._game_master['timestampMs']) / 1000)
 
         type_list = []
 
-        items = self._game_master.get('itemTemplate') or self._game_master.get('itemTemplates')
-
-        for item in items:
+        for item in self._game_master:
             tid = item['templateId']
+            data = item['data']
 
             # ignore suffixes
             # if self._should_ignore(tid):
@@ -295,29 +295,29 @@ class GameMaster():
 
             # get cp multiplier
             if tid == "PLAYER_LEVEL_SETTINGS":
-                self._cp_multiplier = item['playerLevel']['cpMultiplier']
+                self._cp_multiplier = data['playerLevel']['cpMultiplier']
                 continue
 
             # save smeargle's moves for processing at the end of this loop
             if tid == "SMEARGLE_MOVES_SETTINGS":
-                smeargle_moves = item['smeargleMovesSettings']
+                smeargle_moves = data['smeargleMovesSettings']
                 continue
 
             if tid == "BATTLE_SETTINGS":
-                self.settings_battle = item['battleSettings']
+                self.settings_battle = data['battleSettings']
 
             if tid == "COMBAT_SETTINGS":
-                self.settings_combat = item['combatSettings']
+                self.settings_combat = data['combatSettings']
 
             if tid == "COMBAT_STAT_STAGE_SETTINGS":
-                self.settings_combat_stat_stage = item['combatStatStageSettings']
+                self.settings_combat_stat_stage = data['combatStatStageSettings']
                 self.buff_multiplier_attack = self.settings_combat_stat_stage['attackBuffMultiplier']
                 self.buff_multiplier_defense = self.settings_combat_stat_stage['defenseBuffMultiplier']
 
             # add forms to self.forms
             r = self._re_forms.match(tid)
             if r:
-                settings = item['formSettings']
+                settings = data['formSettings']
                 baseName = settings['pokemon']
                 for formSettings in settings.get('forms', []):
                     formName = formSettings['form']
@@ -327,7 +327,7 @@ class GameMaster():
             # make type effectiveness
             r = self._re_type.match(tid)
             if r:
-                effectiveness = item['typeEffective']
+                effectiveness = data['typeEffective']
                 attack_type = effectiveness['attackType']
                 attack_scalar = effectiveness['attackScalar']
                 self.effectiveness[attack_type] = attack_scalar
@@ -335,9 +335,11 @@ class GameMaster():
                 continue
 
             # store pokemon settings
+            if tid.endswith('_HOME_FORM_REVERSION') or tid.endswith('_HOME_REVERSION'):
+                continue
             r = self._re_pokemon.match(tid)
             if r:
-                settings = item.get('pokemon') or item.get('pokemonSettings')
+                settings = data['pokemonSettings']
                 assert settings
                 # form name takes precedence over family name
                 name = settings.get('form') or settings.get('uniqueId') or settings.get('pokemonId')
@@ -352,7 +354,7 @@ class GameMaster():
             # store move settings
             r = self._re_move.match(tid)
             if r:
-                settings = item.get('move') or item.get('moveSettings')
+                settings = data['moveSettings']
                 name = settings['movementId']
                 assert name not in self.moves_battle
                 self.moves_battle[name] = settings
@@ -361,7 +363,7 @@ class GameMaster():
             # store combat (pvp) move settings
             r = self._re_combat_move.match(tid)
             if r:
-                settings = item['combatMove']
+                settings = data['combatMove']
                 name = r.group(2)
                 assert name not in self.moves_combat
                 self.moves_combat[name] = settings
