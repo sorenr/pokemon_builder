@@ -569,4 +569,4 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=log_level, format=log_format)
 
-    unittest.main()
+    unittest.main(failfast=True)
