@@ -297,16 +297,16 @@ class GameMasterUnitTest(unittest.TestCase):
 
     def test_cp_mult(self):
         """Compute correct cp_multiplier values."""
-        for l, v in (
-                (1, 0.094),
+        for level, val in (
+                (1.0, 0.094),
                 (1.5, 0.1351374318),
-                (10, 0.4225),
+                (10.0, 0.4225),
                 (10.5, 0.4329264091),
-                (20, 0.5974),
+                (20.0, 0.5974),
                 (20.5, 0.6048236651),
-                (40, 0.7903),
-                (41, 0.79530001)):
-            self.assertAlmostEqual(self.gm.cp_multiplier(l), v)
+                (40.0, 0.7903),
+                (41.0, 0.79530001)):
+            self.assertAlmostEqual(self.gm.cp_multiplier(level), val)
 
 
 if __name__ == "__main__":
