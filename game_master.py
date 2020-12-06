@@ -109,6 +109,7 @@ class League():
         self.name = self.name[len(GameMaster.K_LEAGUE):]
         data = item['data']['combatLeague']
         self.leagueType = data['leagueType']
+        self.pokemonCount = data['pokemonCount']
 
         self.bannedPokemon = set(data['bannedPokemon'])
 
@@ -148,6 +149,7 @@ class GameMaster():
     _re_move = re.compile(r'V(\d+)_MOVE_(.+)')
     _re_combat_move = re.compile(r'COMBAT_V(\d+)_MOVE_(.+)')
 
+    K_STATS = "stats"
     K_FAST = "quickMoves"
     K_FAST_ELITE = "eliteQuickMove"
     K_FAST_LEGACY = "legacyQuickMove"
@@ -169,6 +171,9 @@ class GameMaster():
     K_SHADOW_BONUS_DEF = "shadowPokemonDefenseBonusMultiplier"
     K_SHADOW_BONUS_ATK = "shadowPokemonAttackBonusMultiplier"
     K_PURIFIED_SUFFIX = "_PURIFIED"
+
+    # Max level to calculate under normal circumstances
+    K_LEVEL_MAX = 51
 
     # possible attacks including non Elite TM-able
     _LEGACY = {
@@ -395,6 +400,9 @@ class GameMaster():
                 # form name takes precedence over family name
                 name = settings.get('form') or settings.get('uniqueId') or settings.get('pokemonId')
                 assert name
+                if not settings.get(GameMaster.K_STATS, {}):
+                    logging.warning("%s has unspecified stats. Skipping...", name)
+                    continue
                 if 'type1' not in settings:
                     settings['type1'] = settings['type']
                 elif 'type' not in settings:

@@ -12,20 +12,25 @@ import pokemon
 
 
 class IVOptimizer():
-    def __init__(self, full_precision=True, simd=True):
-        self.pokemon = pokemon.Pokemon(GM)
+    full_precision = True
+    simd = True
+
+    def __init__(self, gm, full_precision=True, simd=True):
+        self.gm = gm
         self.full_precision = full_precision
         self.simd = simd
 
     def find_optimal_proc(self, names):
         """Worker process to compute optimal IVs for 1500 and 2500 cp"""
         optimal = {}
+        p = pokemon.Pokemon(self.gm)
         for name in names:
-            self.pokemon.update(name=name)
-            for mcp in [1500, 2500, None]:
-                o = self.pokemon.optimize_iv(max_cp=mcp, 
-                        full_precision=self.full_precision,
-                        simd=self.simd)
+            p.update(name=name)
+            assert pokemon.Pokemon.iv_cache is not None
+            for mcp in [500, 1500, 2500, None]:
+                o = p.optimize_iv(cp_max=mcp,
+                                  full_precision=self.full_precision,
+                                  simd=self.simd)
                 if o:
                     optimal.setdefault(name, {})[mcp] = o
         return optimal
@@ -38,16 +43,16 @@ def chunk(l, n):
         yield l[i: i + n]
 
 
-def find_optimal_multi(iv_cache=pokemon.OPTIMAL_IV, threads=None, npokemon=None,
+def find_optimal_multi(gm, iv_cache=pokemon.OPTIMAL_IV, threads=None, npokemon=None,
                        forms=None, full_precision=True, simd=True):
     """Coordinating process to run find_optimal_proc across multiple procs"""
-    optimizer = IVOptimizer(full_precision=full_precision, simd=simd)
+    optimizer = IVOptimizer(gm, full_precision=full_precision, simd=simd)
     iv_cache = pokemon.Cache(iv_cache)
     # forms to optimize
     if forms:
         missing = forms
     else:
-        missing = GM.pokemon.keys()
+        missing = gm.pokemon.keys()
     # Find which pokemon are not in the list
     missing = [x for x in missing if x not in iv_cache]
     if npokemon is not None:
@@ -96,8 +101,8 @@ if __name__ == "__main__":
     simd = not args.serial
     full_precision = not args.low_precision
 
-    GM = game_master.GameMaster()
-    optimal = find_optimal_multi(args.output, threads=args.threads, 
+    gm = game_master.GameMaster()
+    optimal = find_optimal_multi(gm, args.output, threads=args.threads,
                                  npokemon=args.npokemon, forms=args.forms,
                                  full_precision=full_precision, simd=simd)
 

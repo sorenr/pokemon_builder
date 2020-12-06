@@ -265,7 +265,7 @@ class Pokemon():
             except KeyError:
                 raise game_master.PokemonKeyError(self.name, self.gm.pokemon)
             self.name_unique = self.data[game_master.GameMaster.K_ID_UNIQUE]
-            self.stats = self.data['stats']
+            self.stats = self.data[game_master.GameMaster.K_STATS]
             self.type = {self.data['type1'], self.data.get('type2')}
             self.type = {game_master.Types[x] for x in self.type if x is not None}
             self.possible_fast = self.gm.possible_fast(name)
@@ -448,7 +448,8 @@ class Pokemon():
         # make static arrays if it's the first time
         if not Pokemon._iv_setup:
             ivs = numpy.arange(16, dtype=numpy.float32)
-            cpm = numpy.array([self.gm.cp_multiplier(x * 0.5) for x in range(2, 83)])
+            steps = range(2, 1 + 2 * self.gm.K_LEVEL_MAX)
+            cpm = numpy.array([self.gm.cp_multiplier(x * 0.5) for x in steps])
             Pokemon._iv_adsl = numpy.array(numpy.meshgrid(ivs, ivs, ivs, cpm)).T.reshape(-1, 4)
             Pokemon._iv_ads = Pokemon._iv_adsl[:, 0:3]
             Pokemon._cpm = Pokemon._iv_adsl[:, -1]
@@ -513,7 +514,7 @@ class Pokemon():
             ])
         return optimal
 
-    def optimize_iv(self, cp_max=None, simd=True, full_precision=True):
+    def optimize_iv(self, cp_max, simd=True, full_precision=True):
         """Optimize the IV stat product & level for a given CP cap."""
         try:
             o = Pokemon.iv_cache[self.name][cp_max]
@@ -526,13 +527,13 @@ class Pokemon():
             pass
 
         # return max CP if we have no limit, or max IV is below the cap
-        self.update(attack=15, defense=15, stamina=15, level=41)
+        self.update(attack=15, defense=15, stamina=15, level=self.gm.K_LEVEL_MAX)
         cp = self.cp()
-        o = [15, 15, 15, 41, self.cp(), self.stat_product(full_precision=full_precision)]
+        o = [15, 15, 15, self.gm.K_LEVEL_MAX, self.cp(), self.stat_product(full_precision=full_precision)]
         if cp_max is None:
             return o
         if cp <= cp_max:
-            logging.debug("%s 15/15/15/41=%d, under the %s IV cap", self.name, cp, cp_max)
+            logging.debug("%s 15/15/15/%d=%d, under the %s IV cap", self.name, self.level, cp, cp_max)
             Pokemon.iv_cache.setdefault(self.name, {})[cp_max] = o
             Pokemon.iv_cache.dirty = True
             return o
