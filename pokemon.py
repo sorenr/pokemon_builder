@@ -17,6 +17,7 @@ import game_master
 
 # default path for the optimal PVP table
 OPTIMAL_IV = "OPTIMAL_IV.json"
+MAX_LEVEL = 41
 
 
 class VAL(enum.Enum):
@@ -265,7 +266,7 @@ class Pokemon():
             except KeyError:
                 raise game_master.PokemonKeyError(self.name, self.gm.pokemon)
             self.name_unique = self.data[game_master.GameMaster.K_ID_UNIQUE]
-            self.stats = self.data['stats']
+            self.stats = self.data[game_master.GameMaster.K_STATS]
             self.type = {self.data['type1'], self.data.get('type2')}
             self.type = {game_master.Types[x] for x in self.type if x is not None}
             self.possible_fast = self.gm.possible_fast(name)
@@ -513,7 +514,7 @@ class Pokemon():
             ])
         return optimal
 
-    def optimize_iv(self, cp_max=None, simd=True, full_precision=True):
+    def optimize_iv(self, cp_max, simd=True, full_precision=True):
         """Optimize the IV stat product & level for a given CP cap."""
         try:
             o = Pokemon.iv_cache[self.name][cp_max]
@@ -526,13 +527,13 @@ class Pokemon():
             pass
 
         # return max CP if we have no limit, or max IV is below the cap
-        self.update(attack=15, defense=15, stamina=15, level=41)
+        self.update(attack=15, defense=15, stamina=15, level=MAX_LEVEL)
         cp = self.cp()
-        o = [15, 15, 15, 41, self.cp(), self.stat_product(full_precision=full_precision)]
+        o = [15, 15, 15, MAX_LEVEL, self.cp(), self.stat_product(full_precision=full_precision)]
         if cp_max is None:
             return o
         if cp <= cp_max:
-            logging.debug("%s 15/15/15/41=%d, under the %s IV cap", self.name, cp, cp_max)
+            logging.debug("%s 15/15/15/%d=%d, under the %s IV cap", self.name, MAX_LEVEL, cp, cp_max)
             Pokemon.iv_cache.setdefault(self.name, {})[cp_max] = o
             Pokemon.iv_cache.dirty = True
             return o
