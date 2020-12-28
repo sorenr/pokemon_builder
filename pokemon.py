@@ -117,22 +117,20 @@ class Pokemon():
             attack = random.randint(0, 15)
         if attack is not VAL.DONT_SET:
             self.iv_attack = attack
-            self.attack = self.iv_attack + self.stats['baseAttack']
-            self.attack *= self.cpm
 
         if defense is VAL.RANDOM:
             defense = random.randint(0, 15)
         if defense is not VAL.DONT_SET:
             self.iv_defense = defense
-            self.defense = self.iv_defense + self.stats['baseDefense']
-            self.defense *= self.cpm
 
         if stamina is VAL.RANDOM:
             stamina = random.randint(0, 15)
         if stamina is not VAL.DONT_SET:
             self.iv_stamina = stamina
-            self.stamina = self.iv_stamina + self.stats['baseStamina']
-            self.stamina *= self.cpm
+
+        self.attack = (self.iv_attack + self.stats['baseAttack']) * self.cpm
+        self.defense = (self.iv_defense + self.stats['baseDefense']) * self.cpm
+        self.stamina = (self.iv_stamina + self.stats['baseStamina']) * self.cpm
 
         # A move's stats depend on its pokemon, so set the pokemon stats before setting its moves.
         if fast is VAL.RANDOM:
