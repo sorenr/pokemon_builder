@@ -830,6 +830,11 @@ class PokemonUnitTest(unittest.TestCase):
             else:
                 self.assertEqual(val1, val2)
 
+    def test_iv_high(self):
+        """Check that levels >40 calculate correct values."""
+        self.assertEqual(2926, int(Pokemon(self.gm, name="CHARIZARD", attack=15, defense=15, stamina=15, level=41).cp()))
+        self.assertEqual(3410, int(Pokemon(self.gm, name="EXCADRILL", attack=15, defense=15, stamina=15, level=44).cp()))
+
     def test_iv_simd(self):
         """Check that iv_serial and iv_simd calculate the same values."""
         logging.info("iv serial/simd tests")
