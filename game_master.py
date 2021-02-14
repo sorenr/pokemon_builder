@@ -163,6 +163,10 @@ class GameMaster():
     K_NORMAL_SUFFIX = "_NORMAL"  # Normal suffix
     K_ID_UNIQUE = "pokemonId"
 
+    K_BASE_ATTACK = "baseAttack"
+    K_BASE_DEFENSE = "baseDefense"
+    K_BASE_STAMINA = "baseStamina"
+
     K_BONUS_DEF = "defenseBonusMultiplier"
 
     K_LEAGUE = 'COMBAT_LEAGUE_VS_SEEKER_'

@@ -309,9 +309,9 @@ class Pokemon():
         if stamina is not VAL.DONT_SET:
             self.iv_stamina = stamina
 
-        self.attack = (self.iv_attack + self.stats['baseAttack']) * self.cpm
-        self.defense = (self.iv_defense + self.stats['baseDefense']) * self.cpm
-        self.stamina = (self.iv_stamina + self.stats['baseStamina']) * self.cpm
+        self.attack = (self.iv_attack + self.stats[self.gm.K_BASE_ATTACK]) * self.cpm
+        self.defense = (self.iv_defense + self.stats[self.gm.K_BASE_DEFENSE]) * self.cpm
+        self.stamina = (self.iv_stamina + self.stats[self.gm.K_BASE_STAMINA]) * self.cpm
 
         self.defense *= self.settings.get(self.gm.K_BONUS_DEF, 1)
 
@@ -458,9 +458,9 @@ class Pokemon():
 
         # compute base attack/defense/stamina
         ads = Pokemon._iv_ads + numpy.array([
-            self.stats['baseAttack'],
-            self.stats['baseDefense'],
-            self.stats['baseStamina']])
+            self.stats[self.gm.K_BASE_ATTACK],
+            self.stats[self.gm.K_BASE_DEFENSE],
+            self.stats[self.gm.K_BASE_STAMINA]])
 
         # compute cp
         ads *= Pokemon._cpm
