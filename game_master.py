@@ -534,10 +534,45 @@ class GameMaster():
         charged_legacy = pdata.get(GameMaster.K_CHARGED_LEGACY, [])
         return set(charged + charged_elite + charged_legacy)
 
-    def move_combinations(self, name, r=2):
+    def best_moves(self, moves):
+        """Given a possible move set, eliminate inferior moves that produce less damage and consume more energy."""
+        best = {}
+        rv = set()
+        for move in moves:
+            move_data = self.moves_combat[move]
+            name = move_data['uniqueId']
+            power = move_data.get('power', 0)
+            delta = move_data.get('energyDelta', 0)
+            best_t = best.setdefault(move_data['type'], {})
+            add = True
+            for bname in list(best_t.keys()):
+                bdata = best_t[bname]
+                bpower = bdata.get('power', 0)
+                bdelta = bdata.get('energyDelta', 0)
+                # FIXME: consider lasting effects
+                if power > bpower and delta > bdelta:
+                    # print("Deleting", bname, "<", move_data['uniqueId'])
+                    del best_t[bname]
+                    rv.remove(bname)
+                if power <= bpower and delta <= bdelta:
+                    # print("Skipping", bname, ">", move_data['uniqueId'], power, delta)
+                    add = False
+                    break
+            if add:
+                # print("Adding", move_data['uniqueId'], power, delta)
+                best_t[name] = move_data
+                rv.add(name)
+        return rv
+
+    def move_combinations(self, name, r=2, best=False):
         """Generate all possible combinations of fast/charged moves for this pokemon."""
-        for fast in self.possible_fast(name):
-            for charged in itertools.combinations(self.possible_charged(name), r):
+        possible_fast = self.possible_fast(name)
+        possible_charged = self.possible_charged(name)
+        if best:
+            possible_fast = self.best_moves(possible_fast)
+            possible_charged = self.best_moves(possible_charged)
+        for fast in possible_fast:
+            for charged in itertools.combinations(possible_charged, r):
                 yield fast, charged
 
     def superset_pokemon(self, names=None):

@@ -564,8 +564,8 @@ class Pokemon():
             return o
         return False
 
-    def move_combinations(self):
-        return self.gm.move_combinations(self.name)
+    def move_combinations(self, best=False, r=2):
+        return self.gm.move_combinations(self.name, best=best, r=r)
 
     def dpt(self, fast, charged, target=None):
         """damage per turn against the given target"""
