@@ -110,6 +110,7 @@ class League():
         data = item['data']['combatLeague']
         self.leagueType = data['leagueType']
         self.pokemonCount = data['pokemonCount']
+        self.pokemonWhiteList = set()
 
         self.bannedPokemon = set(data['bannedPokemon'])
 
@@ -118,9 +119,18 @@ class League():
             if cpLimit:
                 self.cp_min = cpLimit.get('minCp', self.cp_min)
                 self.cp_max = cpLimit.get('maxCp', self.cp_max)
+                continue
+
             levelRange = condition.get('pokemonLevelRange')
             if levelRange:
                 self.level_max = levelRange.get('obMaxLevel', self.level_max)
+                continue
+
+            pokemonWhiteList = condition.get('pokemonWhiteList')
+            if pokemonWhiteList:
+                for pattr in pokemonWhiteList['pokemon']:
+                    self.pokemonWhiteList.add(pattr.get('form', pattr['id']))
+                continue
 
     def is_eligible(self, name, cp):
         return ((name not in self.bannedPokemon)
