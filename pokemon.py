@@ -79,7 +79,7 @@ class Move():
         """Calculate damage dealt to the target."""
         if not self.power:
             return 1
-        attack = self.pokemon.attack * self.bonus_atk
+        attack = self.pokemon.attack * self.bonus_atk * self.pokemon.bonus_atk
         if self.pokemon.is_purified and target is not None and target.is_shadow:
             attack *= self.pokemon.settings.get('purifiedPokemonAttackMultiplierVsShadow', 1)
         attack *= self.pokemon.gm.buff_multiplier_attack[self.pokemon.buff_attack]
