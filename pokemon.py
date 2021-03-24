@@ -266,7 +266,7 @@ class Pokemon():
                 raise game_master.PokemonKeyError(self.name, self.gm.pokemon)
             self.name_unique = self.data[game_master.GameMaster.K_ID_UNIQUE]
             self.stats = self.data[game_master.GameMaster.K_STATS]
-            self.type = {self.data['type1'], self.data.get('type2')}
+            self.type = {self.data[game_master.GameMaster.K_TYPE1], self.data.get(game_master.GameMaster.K_TYPE2)}
             self.type = {game_master.Types[x] for x in self.type if x is not None}
             self.possible_fast = self.gm.possible_fast(name)
             self.possible_charged = self.gm.possible_charged(name)

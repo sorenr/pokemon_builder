@@ -12,6 +12,7 @@ import enum
 import itertools
 import difflib
 import fnmatch
+import copy
 import pokemon
 
 
@@ -172,6 +173,10 @@ class GameMaster():
     K_SMEARGLE_MOVES = "SMEARGLE_MOVES_SETTINGS"
     K_NORMAL_SUFFIX = "_NORMAL"  # Normal suffix
     K_ID_UNIQUE = "pokemonId"
+    K_TYPE1 = "type"
+    K_TYPE2 = "type2"
+    K_EVOLUTION_MEGA = 'TEMP_EVOLUTION_MEGA'
+    K_EVOLUTION_OVERRIDES = 'tempEvoOverrides'
 
     K_BASE_ATTACK = "baseAttack"
     K_BASE_DEFENSE = "baseDefense"
@@ -417,11 +422,25 @@ class GameMaster():
                 if not settings.get(GameMaster.K_STATS, {}):
                     logging.warning("%s has unspecified stats. Skipping...", name)
                     continue
-                if 'type1' not in settings:
-                    settings['type1'] = settings['type']
-                elif 'type' not in settings:
-                    settings['type'] = settings['type1']
                 self.pokemon[name] = settings
+
+                # add the mega evolved forms
+                for tempEvo in settings.get(GameMaster.K_EVOLUTION_OVERRIDES, []):
+                    evoId = tempEvo.get('tempEvoId')
+                    if not evoId.startswith(GameMaster.K_EVOLUTION_MEGA):
+                        continue
+                    settings_mega = copy.deepcopy(settings)
+                    settings_mega[GameMaster.K_TYPE1] = tempEvo['typeOverride1']
+                    override_2 = tempEvo.get('typeOverride2')
+                    if override_2:
+                        settings_mega[GameMaster.K_TYPE2] = override_2
+                    settings_mega[GameMaster.K_STATS].update(tempEvo[GameMaster.K_STATS])
+                    # new name for the mega including _X or _Y for Charizard
+                    name_mega = name + '_MEGA' + evoId[len(GameMaster.K_EVOLUTION_MEGA):]
+                    # delete the mega overrides, since megas can't mega-evolve
+                    del settings_mega[GameMaster.K_EVOLUTION_OVERRIDES]
+                    self.pokemon[name_mega] = settings_mega
+
                 continue
 
             # store move settings
