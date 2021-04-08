@@ -175,6 +175,7 @@ class GameMaster():
     K_ID_UNIQUE = "pokemonId"
     K_TYPE1 = "type"
     K_TYPE2 = "type2"
+    K_IS_MEGA = "is_mega"
     K_EVOLUTION_MEGA = 'TEMP_EVOLUTION_MEGA'
     K_EVOLUTION_OVERRIDES = 'tempEvoOverrides'
 
@@ -422,6 +423,7 @@ class GameMaster():
                 if not settings.get(GameMaster.K_STATS, {}):
                     logging.warning("%s has unspecified stats. Skipping...", name)
                     continue
+                settings[GameMaster.K_IS_MEGA] = False
                 self.pokemon[name] = settings
 
                 # add the mega evolved forms
@@ -439,6 +441,7 @@ class GameMaster():
                     name_mega = name + '_MEGA' + evoId[len(GameMaster.K_EVOLUTION_MEGA):]
                     # delete the mega overrides, since megas can't mega-evolve
                     del settings_mega[GameMaster.K_EVOLUTION_OVERRIDES]
+                    settings_mega[GameMaster.K_IS_MEGA] = True
                     self.pokemon[name_mega] = settings_mega
 
                 continue
