@@ -314,6 +314,9 @@ class Pokemon():
             attack = 15
         if attack is not VAL.DONT_SET:
             self.iv_attack = attack
+            self.attack = (self.iv_attack + self.stats[self.gm.K_BASE_ATTACK])
+            if not raidBossTier:
+                self.attack *= self.cpm
 
         if defense is VAL.RANDOM:
             defense = random.randint(0, 15)
@@ -321,6 +324,9 @@ class Pokemon():
             defense = 15
         if defense is not VAL.DONT_SET:
             self.iv_defense = defense
+            self.defense = (self.iv_defense + self.stats[self.gm.K_BASE_DEFENSE])
+            if not raidBossTier:
+                self.defense *= self.cpm
 
         if stamina is VAL.RANDOM:
             stamina = random.randint(0, 15)
@@ -328,15 +334,10 @@ class Pokemon():
             stamina = 15
         if stamina is not VAL.DONT_SET:
             self.iv_stamina = stamina
-
-        self.attack = (self.iv_attack + self.stats[self.gm.K_BASE_ATTACK])
-        self.defense = (self.iv_defense + self.stats[self.gm.K_BASE_DEFENSE])
-        if raidBossTier:
-            self.stamina = Pokemon.K_TIER_STAMINA[raidBossTier]
-        else:
-            self.attack *= self.cpm
-            self.defense *= self.cpm
-            self.stamina = (self.iv_stamina + self.stats[self.gm.K_BASE_STAMINA]) * self.cpm
+            if raidBossTier:
+                self.stamina = Pokemon.K_TIER_STAMINA[raidBossTier]
+            else:
+                self.stamina = (self.iv_stamina + self.stats[self.gm.K_BASE_STAMINA]) * self.cpm
 
         self.defense *= self.settings.get(self.gm.K_BONUS_DEF, 1)
 
