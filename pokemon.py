@@ -197,6 +197,16 @@ class Pokemon():
     iv_cache = None
     _iv_setup = False
 
+    # https://pokemongo.fandom.com/wiki/Raid_Battle
+    K_TIER_STAMINA = {
+        1: 600,
+        2: 1800,
+        3: 3600,
+        4: 9000,
+        5: 15000,  # mega
+        6: 22500,  # marked as 5
+    }
+
     def __init__(self, gm,
                  name=VAL.RANDOM,
                  attack=VAL.RANDOM,
@@ -207,7 +217,8 @@ class Pokemon():
                  charged=VAL.RANDOM,
                  context=CONTEXT.COMBAT,
                  state=None,
-                 iv_cache=OPTIMAL_IV):
+                 iv_cache=OPTIMAL_IV,
+                 raidBossTier=0):
         if Pokemon.iv_cache is None:
             Pokemon.iv_cache = Cache(iv_cache)
             if len(Pokemon.iv_cache) > 0:
@@ -233,7 +244,7 @@ class Pokemon():
         self.update(name=name, attack=attack, defense=defense,
                     stamina=stamina, level=level,
                     fast=fast, charged=charged,
-                    context=context)
+                    context=context, raidBossTier=raidBossTier)
 
     def update(self,
                name=VAL.DONT_SET,
@@ -243,7 +254,8 @@ class Pokemon():
                level=VAL.DONT_SET,
                fast=VAL.DONT_SET,
                charged=VAL.DONT_SET,
-               context=VAL.DONT_SET):
+               context=VAL.DONT_SET,
+               raidBossTier=0):
         """Set or randomize values if requested."""
 
         # everything depends on context, so set context first
@@ -317,9 +329,14 @@ class Pokemon():
         if stamina is not VAL.DONT_SET:
             self.iv_stamina = stamina
 
-        self.attack = (self.iv_attack + self.stats[self.gm.K_BASE_ATTACK]) * self.cpm
-        self.defense = (self.iv_defense + self.stats[self.gm.K_BASE_DEFENSE]) * self.cpm
-        self.stamina = (self.iv_stamina + self.stats[self.gm.K_BASE_STAMINA]) * self.cpm
+        self.attack = (self.iv_attack + self.stats[self.gm.K_BASE_ATTACK])
+        self.defense = (self.iv_defense + self.stats[self.gm.K_BASE_DEFENSE])
+        if raidBossTier:
+            self.stamina = Pokemon.K_TIER_STAMINA[raidBossTier]
+        else:
+            self.attack *= self.cpm
+            self.defense *= self.cpm
+            self.stamina = (self.iv_stamina + self.stats[self.gm.K_BASE_STAMINA]) * self.cpm
 
         self.defense *= self.settings.get(self.gm.K_BONUS_DEF, 1)
 
@@ -895,6 +912,31 @@ class PokemonUnitTest(unittest.TestCase):
 
         # they should be the same
         self.assertEqual(p_old, p_new)
+
+    def test_raidBoss(self):
+        """Test CP for raid bosses."""
+        p = Pokemon(
+            self.gm,
+            name="THUNDURUS_THERIAN",
+            attack=VAL.OPTIMAL,
+            defense=VAL.OPTIMAL,
+            stamina=VAL.OPTIMAL,
+            level=40,
+            context=CONTEXT.BATTLE,
+            raidBossTier=5)
+        print(p)
+        self.assertEqual(int(p.cp()), 50369)
+
+        p.update(
+            name="TORNADUS_THERIAN",
+            attack=VAL.OPTIMAL,
+            defense=VAL.OPTIMAL,
+            stamina=VAL.OPTIMAL,
+            level=40,
+            context=CONTEXT.BATTLE,
+            raidBossTier=5)
+        print(p)
+        self.assertEqual(int(p.cp()), 44256)
 
 
 if __name__ == "__main__":
