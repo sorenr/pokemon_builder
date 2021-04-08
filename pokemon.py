@@ -289,23 +289,31 @@ class Pokemon():
             self.bonus_def *= self.settings[self.gm.K_SHADOW_BONUS_DEF]
 
         if level is VAL.RANDOM:
-            level = 0.5 * random.randint(2, 82)
+            level = 0.5 * random.randint(2, game_master.GameMaster.K_LEVEL_MAX * 2)
+        elif level is VAL.OPTIMAL:
+            level = game_master.GameMaster.K_LEVEL_MAX
         if level is not VAL.DONT_SET:
             self.level = level
             self.cpm = self.gm.cp_multiplier(self.level)
 
         if attack is VAL.RANDOM:
             attack = random.randint(0, 15)
+        elif attack is VAL.OPTIMAL:
+            attack = 15
         if attack is not VAL.DONT_SET:
             self.iv_attack = attack
 
         if defense is VAL.RANDOM:
             defense = random.randint(0, 15)
+        elif defense is VAL.OPTIMAL:
+            defense = 15
         if defense is not VAL.DONT_SET:
             self.iv_defense = defense
 
         if stamina is VAL.RANDOM:
             stamina = random.randint(0, 15)
+        elif stamina is VAL.OPTIMAL:
+            stamina = 15
         if stamina is not VAL.DONT_SET:
             self.iv_stamina = stamina
 
