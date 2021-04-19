@@ -73,8 +73,8 @@ class PokemonKeyError(KeyError):
     def __init__(self, key, alternatives):
         if key is None:
             super().__init__("None: did you mean pokemon.VAL.RANDOM or pokemon.VAL.OPTIMAL?")
-        matches = difflib.get_close_matches(key, alternatives)
-        matches = ", ".join(matches)
+        matches = difflib.get_close_matches(key, alternatives) or alternatives
+        matches = ", ".join(sorted(matches))
         message = "{0:s}: did you mean {1:s} ?".format(key, matches)
         super().__init__(message)
 
