@@ -48,8 +48,17 @@ class Move():
         self.gm = self.pokemon.gm
         self.update(name)
 
-    def update(self, name):
+    def update(self, name, any_move=False):
         """Set the attack name and the data depending on that name."""
+        if not any_move:
+            # only allow moves within this pokemon's possible moves
+            if name not in self.pokemon.possible_moves:
+                possible_match = [m for m in self.pokemon.possible_moves if m.startswith(name)]
+                if len(possible_match) == 1:
+                    print(name, "->", possible_match[0])
+                    name = possible_match[0]
+                else:
+                    raise game_master.PokemonKeyError(name, self.pokemon.possible_moves)
         self.name = name
         try:
             self.data = self.pokemon.moves[self.name]
@@ -282,6 +291,7 @@ class Pokemon():
             self.type = {game_master.Types[x] for x in self.type if x is not None}
             self.possible_fast = self.gm.possible_fast(name)
             self.possible_charged = self.gm.possible_charged(name)
+            self.possible_moves = self.possible_fast.union(self.possible_charged)
 
             # we can't keep our moves if they're not legal moves
             if fast is VAL.DONT_SET and self.fast not in self.possible_fast:
@@ -345,7 +355,11 @@ class Pokemon():
         if fast is VAL.RANDOM:
             fast = random.choice(list(self.possible_fast))
         if fast not in [VAL.DONT_SET, VAL.OPTIMAL]:
-            self.fast = isinstance(fast, Move) and fast or Move(self, fast)
+            if isinstance(fast, Move):
+                assert(fast.pokemon is self)
+                self.fast = fast
+            else:
+                self.fast = Move(self, fast)
 
         if charged is VAL.RANDOM:
             # pick 1 or 2 charged attacks
@@ -356,7 +370,13 @@ class Pokemon():
                 charged.append(random.choice(p_charged))
         if charged not in [VAL.DONT_SET, VAL.OPTIMAL]:
             # make charged Moves if it's not a Move already
-            self.charged = [isinstance(c, Move) and c or Move(self, c) for c in charged]
+            self.charged = []
+            for c in charged:
+                if isinstance(c, Move):
+                    assert(c.pokemon is self)
+                else:
+                    c = Move(self, c)
+                self.charged.append(c)
 
         # reset to default combat values
         self.reset()
