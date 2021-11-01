@@ -201,10 +201,13 @@ class Cache(dict):
 class Pokemon():
     """Full representation of a specific Pokemon: type, IVs, attacks."""
 
+    name = None
     fast = None
     charged = []
     iv_cache = None
     _iv_setup = False
+    is_shadow = False
+    is_purified = False
 
     # https://pokemongo.fandom.com/wiki/Raid_Battle
     K_TIER_STAMINA = {
@@ -279,8 +282,22 @@ class Pokemon():
 
         if name is VAL.RANDOM:
             name = random.choice(list(self.gm.pokemon.keys()))
+
         if name is not VAL.DONT_SET:
             self.name = name
+
+            if self.name.endswith(game_master.GameMaster.K_SHADOW_SUFFIX):
+                self.name = self.name[:-len(game_master.GameMaster.K_SHADOW_SUFFIX)]
+                self.is_shadow = True
+                self.is_purified = False
+            elif self.name.endswith(game_master.GameMaster.K_PURIFIED_SUFFIX):
+                self.name = self.name[:-len(game_master.GameMaster.K_PURIFIED_SUFFIX)]
+                self.is_shadow = False
+                self.is_purified = True
+            else:
+                self.is_shadow = False
+                self.is_purified = False
+
             try:
                 self.data = self.gm.pokemon[self.name]
             except KeyError:
@@ -289,19 +306,17 @@ class Pokemon():
             self.stats = self.data[game_master.GameMaster.K_STATS]
             self.type = {self.data[game_master.GameMaster.K_TYPE1], self.data.get(game_master.GameMaster.K_TYPE2)}
             self.type = {game_master.Types[x] for x in self.type if x is not None}
-            self.possible_fast = self.gm.possible_fast(name)
-            self.possible_charged = self.gm.possible_charged(name)
+            self.possible_fast = self.gm.possible_fast(self.name)
+            self.possible_charged = self.gm.possible_charged(self.name, self.is_shadow, self.is_purified)
             self.possible_moves = self.possible_fast.union(self.possible_charged)
 
             # we can't keep our moves if they're not legal moves
-            if fast is VAL.DONT_SET and self.fast not in self.possible_fast:
+            if fast is VAL.DONT_SET and self.fast.name not in self.possible_fast:
                 fast = VAL.RANDOM
-            self.charged = [x for x in self.charged if x in self.possible_charged]
-            if charged is VAL.DONT_SET and not self.charged:
-                charged = VAL.RANDOM
-
-        self.is_shadow = self.name.endswith(self.gm.K_SHADOW_SUFFIX)
-        self.is_purified = self.name.endswith(self.gm.K_PURIFIED_SUFFIX)
+            charged_len = min(len(self.charged), len(self.possible_charged))
+            self.charged = {x for x in self.charged if x in self.possible_charged}
+            while len(self.charged) < charged_len:
+                self.charged.add(random.choice(list(self.possible_charged - self.charged)))
 
         self.bonus_atk = 1
         self.bonus_def = self.settings.get(self.gm.K_BONUS_DEF, 1)
@@ -368,6 +383,7 @@ class Pokemon():
             if len(p_charged) > 1 and random.random() > 0.5:
                 p_charged.remove(charged[0])
                 charged.append(random.choice(p_charged))
+
         if charged not in [VAL.DONT_SET, VAL.OPTIMAL]:
             # make charged Moves if it's not a Move already
             self.charged = []
@@ -403,8 +419,13 @@ class Pokemon():
         self.energy = 0
 
     def copy(self):
+        nname = self.name
+        if self.is_shadow:
+            nname = nname + game_master.GameMaster.K_SHADOW_SUFFIX
+        if self.is_purified:
+            nname = nname + game_master.GameMaster.K_PURIFIED_SUFFIX
         return Pokemon(self.gm,
-                       name=self.name,
+                       name=nname,
                        attack=self.iv_attack,
                        defense=self.iv_defense,
                        stamina=self.iv_stamina,
@@ -414,11 +435,16 @@ class Pokemon():
 
     def __str__(self):
         """Return a human-readable string representation of the pokemon."""
+        name = self.name
+        if self.is_shadow:
+            name = name + game_master.GameMaster.K_SHADOW_SUFFIX
+        if self.is_purified:
+            name = name + game_master.GameMaster.K_PURIFIED_SUFFIX
         iv_str = "{0:d}/{1:d}/{2:d}".format(self.iv_attack, self.iv_defense, self.iv_stamina)
         type_str = "/".join(sorted([str(x) for x in self.type]))
         moves_str = str(self.fast) + " " + "+".join(sorted([str(x) for x in self.charged]))
         cp = self.cp()
-        return f"{self.name:s} ({type_str:s}) {iv_str:s} {self.level:0.1f} {moves_str:s} CP={cp:0.1f}"
+        return f"{name:s} ({type_str:s}) {iv_str:s} {self.level:0.1f} {moves_str:s} CP={cp:0.1f}"
 
     def __repr__(self):
         args = [self.name,
@@ -611,7 +637,7 @@ class Pokemon():
         return False
 
     def move_combinations(self, best=False, r=2):
-        return self.gm.move_combinations(self.name, best=best, r=r)
+        return self.gm.move_combinations(self.name, self.is_shadow, self.is_purified, best=best, r=r)
 
     def dpt(self, fast, charged, target=None):
         """damage per turn against the given target"""
@@ -689,32 +715,6 @@ class Pokemon():
                     break
         # update to the best fast/charged moves
         self.update(fast=fast, charged=charged)
-
-    def issuperset(self, other):
-        """return whether 'self' is functionally the same, or has extra moves."""
-
-        # if it's not the same stats and type it can't be a superset
-        if self.stats != other.stats or self.type != other.type:
-            return 0
-
-        bonuses = (game_master.GameMaster.K_BONUS_DEF,
-                   game_master.GameMaster.K_SHADOW_BONUS_DEF,
-                   game_master.GameMaster.K_SHADOW_BONUS_ATK)
-        for bonus in bonuses:
-            if self.data.get(bonus, 1.0) != other.data.get(bonus, 1.0):
-                return 0
-
-        if self.possible_fast == other.possible_fast and self.possible_charged == other.possible_charged:
-            # identical supersets
-            return 1
-
-        if not self.possible_fast.issuperset(other.possible_fast):
-            return 0
-        if not self.possible_charged.issuperset(other.possible_charged):
-            return 0
-
-        # is a superset containing extra items
-        return 2
 
 
 class PokemonUnitTest(unittest.TestCase):

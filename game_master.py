@@ -11,9 +11,7 @@ import unittest
 import enum
 import itertools
 import difflib
-import fnmatch
 import copy
-import pokemon
 
 
 """
@@ -180,6 +178,8 @@ class GameMaster():
     K_SMEARGLE = "SMEARGLE"
     K_SMEARGLE_MOVES = "SMEARGLE_MOVES_SETTINGS"
     K_NORMAL_SUFFIX = "_NORMAL"  # Normal suffix
+    K_POWER = "power"
+    K_ENERGY_DELTA = "energy_delta"
     K_ID_UNIQUE = "pokemonId"
     K_TYPE1 = "type"
     K_TYPE2 = "type2"
@@ -195,90 +195,16 @@ class GameMaster():
 
     K_LEAGUE = 'COMBAT_LEAGUE_VS_SEEKER_'
 
+    K_SHADOW = "shadow"
     K_SHADOW_SUFFIX = "_SHADOW"
     K_SHADOW_BONUS_DEF = "shadowPokemonDefenseBonusMultiplier"
     K_SHADOW_BONUS_ATK = "shadowPokemonAttackBonusMultiplier"
+    K_SHADOW_CHARGED = "shadowChargeMove"
     K_PURIFIED_SUFFIX = "_PURIFIED"
+    K_PURIFIED_CHARGED = "purifiedChargeMove"
 
     # Max level to calculate under normal circumstances
     K_LEVEL_MAX = 51
-
-    # possible attacks including non Elite TM-able
-    _LEGACY = {
-        'ACID_FAST': ['GRIMER*', 'KOFFING*', 'WEEZING*', 'MUK*'],
-        'ANCIENT_POWER': ['MAMOSWINE*'],
-        'BITE_FAST': ['ARCANINE*', 'SHEDINJA*'],
-        'BLAST_BURN': ['CHARIZARD*', 'INFERNAPE*', 'TYPHLOSION*'],
-        'BLIZZARD': ['CLOYSTER'],
-        'BODY_SLAM': ['JIGGLYPUFF*', 'LICKITUNG*', 'LICKILICKY*', 'SLAKING*'],
-        'BUG_BITE_FAST': ['BUTTERFREE*', 'BEEDRILL*', 'PARASECT*', 'VENOMOTH*'],
-        'BULLDOZE': ['ARCANINE*'],
-        'BRINE': [],
-        'DARK_PULSE': ['GENGAR*'],
-        'DAZZLING_GLEAM': ['ALAKAZAM*'],
-        'DRAGON_PULSE': ['AMPHAROS*', 'GYARADOS*', 'LAPRAS*'],
-        'DRAGON_TAIL_FAST': ['GYARADOS*'],
-        'EARTH_POWER': ['FLYGON*'],
-        'EARTHQUAKE': ['GASTRODON*'],
-        'EMBER_FAST': ['CHARIZARD*', 'NINETALES*', 'RAPIDASH*', 'MOLTRES*'],
-        'FIRE_BLAST': ['PONYTA'],
-        'FRENZY_PLANT': ['MEGANIUM*', 'SCEPTILE*', 'TORTERRA*', 'VENUSAUR*'],
-        'FRUSTRATION': ['*_SHADOW'],
-        'GIGA_DRAIN': [],
-        'GRASS_KNOT': ['BRELOOM*'],
-        'GUNK_SHOT': ['EKANS*'],
-        'HEART_STAMP': [],
-        'HYDRO_CANNON': ['EMPOLEON*', 'SWAMPERT*', 'FERALIGATR*'],
-        'HYDRO_PUMP_BLASTOISE': ['BLASTOISE*'],
-        'HYPER_BEAM': ['MEWTWO'],
-        'ICE_BEAM': ['LAPRAS*'],
-        'ICE_SHARD_FAST': ['DEWGONG*', 'LAPRAS*'],
-        'IRON_HEAD': ['ONIX*'],
-        'LAST_RESORT': ['FLAREON*', 'GLACEON*', 'JOLTEON*', 'LEAFEON*', 'UMBREON*', 'VAPOREON*'],
-        'LICK_FAST': ['GENGAR*', 'HAUNTER*'],
-        'MEGA_DRAIN': [],
-        'MEGAHORN': ['RHYDON*'],
-        'METEOR_MASH': ['METAGROSS*'],
-        'NIGHT_SLASH': ['PERSIAN*'],
-        'OMINOUS_WIND': ['GASTLY*'],
-        'ORIGIN_PULSE': [],
-        'OUTRAGE': ['SALAMENCE*'],
-        'PARABOLIC_CHARGE': [],
-        'PLAY_ROUGH': ['JIGGLYPUFF*'],
-        'POWER_WHIP': ['TANGELA*'],
-        'PRECIPICE_BLADES': [],
-        'PSYBEAM': ['CHANSEY*'],
-        'PSYCHIC': ['ALAKAZAM*', 'GENGAR*'],
-        'PSYSHOCK': ['HYPNO*'],
-        'PSYSTRIKE': ['MEWTWO', 'MEWTWO_A'],
-        'ROCK_SLIDE': ['ONIX*'],
-        'THUNDER': ['RAICHU*'],
-        'REST': [],
-        'RETURN': ['*_PURIFIED'],
-        'ROCK_WRECKER': ['RHYPERIOR*'],
-        'SACRED_SWORD': ['COBALION*'],
-        'SCALD': ['POLIWHIRL*'],
-        'SCALD_BLASTOISE': ['BLASTOISE*'],
-        'SHADOW_BALL': ['MEWTWO'],
-        'SLUDGE_WAVE': ['GENGAR*'],
-        'SMACK_DOWN_FAST': ['TYRANITAR*'],
-        'SIGNAL_BEAM': ['VOLTORB*'],
-        'STOMP': ['HITMONLEE*'],
-        'SUCKER_PUNCH_FAST': ['GASTLY*'],
-        'SWIFT': ['DODUO'],
-        'SUBMISSION': ['POLIWRATH*'],
-        'SYNCHRONOISE': ['GALLADE*', 'GARDEVOIR*'],
-        'THUNDER_SHOCK_FAST': ['ZAPDOS*'],
-        'TWISTER': ['SPEAROW*', 'FEAROW*'],
-        'WATER_GUN_FAST': ['FERALIGATR*', 'SEEL*'],
-        'WATER_GUN_FAST_BLASTOISE': ['BLASTOISE*'],
-        'WEATHER_BALL_ROCK': [],
-        'WING_ATTACK_FAST': ['CHARIZARD*'],
-        'WRAP_GREEN': [],
-        'WRAP_PINK': [],
-        'YAWN_FAST': ['SNORLAX'],
-        'ZEN_HEADBUTT_FAST': ['EXEGGCUTE'],
-    }
 
     # item prefixes to ignore
     _TID_IGNORE = [
@@ -475,42 +401,6 @@ class GameMaster():
             # warn about a possibly important item we're ignoring
             # logging.debug("Won't process %s", tid)
 
-        # add legacy moves to the lists of elite tm-able moves
-        legacy_fast = 0
-        legacy_charged = 0
-        all_moves = set(self.moves_combat.keys())
-        all_moves.update(self.moves_battle.keys())
-        for move, patterns in GameMaster._LEGACY.items():
-            if move not in all_moves:
-                raise PokemonKeyError(move, all_moves)
-            for pattern in patterns:
-                matches = [x for x in self.pokemon.keys() if fnmatch.fnmatch(x, pattern)]
-                if not matches:
-                    raise Exception("No pokemon match %s:%s", move, pattern)
-                for match in matches:
-                    if move.endswith(GameMaster.K_FAST_SUFFIX) or GameMaster.K_FAST_INFIX in move:
-                        if move in self.pokemon[match][GameMaster.K_FAST]:
-                            # warn if our regular charged table already has this "legacy" move
-                            logging.warning("%s already has %s", match, move)
-                        elif move in self.pokemon[match].get(GameMaster.K_FAST_ELITE, []):
-                            # skip if our Elite TM table already has this legacy move
-                            continue
-                        else:
-                            legacy_fast += 1
-                            logging.debug("%d %s legacy %s", legacy_fast, match, move)
-                            self.pokemon[match].setdefault(GameMaster.K_FAST_LEGACY, []).append(move)
-                    elif move in self.pokemon[match][GameMaster.K_CHARGED]:
-                        # warn if our regular charged table already has this "legacy" move
-                        logging.warning("%s already has %s", match, move)
-                    elif move in self.pokemon[match].get(GameMaster.K_CHARGED_ELITE, []):
-                        # skip if our Elite TM table already has this legacy move
-                        continue
-                    else:
-                        legacy_charged += 1
-                        logging.debug("%d %s legacy %s", legacy_charged, match, move)
-                        self.pokemon[match].setdefault(GameMaster.K_CHARGED_LEGACY, []).append(move)
-        logging.info("added %d fast, %d charged legacy moves", legacy_fast, legacy_charged)
-
         # Add Smeargle's moves
         assert GameMaster.K_FAST not in self.pokemon[GameMaster.K_SMEARGLE]
         assert GameMaster.K_CHARGED not in self.pokemon[GameMaster.K_SMEARGLE]
@@ -566,13 +456,18 @@ class GameMaster():
         fast_legacy = pdata.get(GameMaster.K_FAST_LEGACY, [])
         return set(fast + fast_elite + fast_legacy)
 
-    def possible_charged(self, name):
+    def possible_charged(self, name, is_shadow, is_purified):
         """Return a tuple of charged) moves for this pokemon."""
         pdata = self.pokemon[name]
         charged = pdata.get(GameMaster.K_CHARGED)
         charged_elite = pdata.get(GameMaster.K_CHARGED_ELITE, [])
         charged_legacy = pdata.get(GameMaster.K_CHARGED_LEGACY, [])
-        return set(charged + charged_elite + charged_legacy)
+        rv = set(charged + charged_elite + charged_legacy)
+        if is_shadow:
+            rv.add(pdata.get(GameMaster.K_SHADOW, {}).get(GameMaster.K_SHADOW_CHARGED))
+        elif is_purified:
+            rv.add(pdata.get(GameMaster.K_SHADOW, {}).get(GameMaster.K_PURIFIED_CHARGED))
+        return rv
 
     def best_moves(self, moves):
         """Given a possible move set, eliminate inferior moves that produce less damage and consume more energy."""
@@ -581,14 +476,14 @@ class GameMaster():
         for move in moves:
             move_data = self.moves_combat[move]
             name = move_data['uniqueId']
-            power = move_data.get('power', 0)
-            delta = move_data.get('energyDelta', 0)
+            power = move_data.get(GameMaster.K_POWER, 0)
+            delta = move_data.get(GameMaster.K_ENERGY_DELTA, 0)
             best_t = best.setdefault(move_data['type'], {})
             add = True
             for bname in list(best_t.keys()):
                 bdata = best_t[bname]
-                bpower = bdata.get('power', 0)
-                bdelta = bdata.get('energyDelta', 0)
+                bpower = bdata.get(GameMaster.K_POWER, 0)
+                bdelta = bdata.get(GameMaster.K_ENERGY_DELTA, 0)
                 # FIXME: consider lasting effects
                 if power > bpower and delta > bdelta:
                     # print("Deleting", bname, "<", move_data['uniqueId'])
@@ -604,50 +499,16 @@ class GameMaster():
                 rv.add(name)
         return rv
 
-    def move_combinations(self, name, r=2, best=False):
+    def move_combinations(self, name, is_shadow, is_purified, r=2, best=False):
         """Generate all possible combinations of fast/charged moves for this pokemon."""
         possible_fast = self.possible_fast(name)
-        possible_charged = self.possible_charged(name)
+        possible_charged = self.possible_charged(name, is_shadow, is_purified)
         if best:
             possible_fast = self.best_moves(possible_fast)
             possible_charged = self.best_moves(possible_charged)
         for fast in possible_fast:
             for charged in itertools.combinations(possible_charged, r):
                 yield fast, charged
-
-    def superset_pokemon(self, names=None):
-        """
-            Return a list of "superset" pokemon having unique move sets.
-            TYRANITAR_PURIFIED is a superset of TYRANITAR: same stats and also has RETURN.
-        """
-        if names is None:
-            names = self.pokemon.keys()
-        uniques = {}
-        for new_name in sorted(names):
-            new_pokemon = pokemon.Pokemon(self, new_name)
-            should_set = True
-            if new_pokemon.name_unique not in uniques:
-                # make a new record if this type isn't there
-                uniques[new_pokemon.name_unique] = {new_pokemon.name: new_pokemon}
-                continue
-            for variant_name, variant_pokemon in uniques[new_pokemon.name_unique].items():
-                superset = new_pokemon.issuperset(variant_pokemon)
-                # if the two are functionally identical...
-                if superset == 1:
-                    # if the new one has a funny name...
-                    for avoid in ('_COPY_', '_FALL_', '_VS_'):
-                        if avoid in new_name:
-                            # ... ignore the one with the funny name
-                            should_set = False
-                            break
-                if superset and should_set:
-                    # delete the subset pokemon; the superset replaces it
-                    del uniques[new_pokemon.name_unique][variant_name]
-                    break
-            if should_set:
-                uniques[new_pokemon.name_unique][new_name] = new_pokemon
-
-        return [x.keys() for x in uniques.values()]
 
     def report(self):
         """Write a summary of the data we've received."""
@@ -672,7 +533,7 @@ class GameMasterUnitTest(unittest.TestCase):
         """Make sure all pokemon have at least one fast and one charged attack."""
         for name in self.gm.pokemon.keys():
             pfast = self.gm.possible_fast(name)
-            pcharged = self.gm.possible_charged(name)
+            pcharged = self.gm.possible_charged(name, is_shadow=False, is_purified=False)
             self.assertGreaterEqual(len(pfast), 1)
             self.assertGreaterEqual(len(pcharged), 1)
 
