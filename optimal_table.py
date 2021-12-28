@@ -25,7 +25,7 @@ class IVOptimizer():
         optimal = {}
         p = pokemon.Pokemon(self.gm)
         for name in names:
-            p.update(name=name)
+            p.update(name=name, fast=pokemon.VAL.DONT_SET, charged=pokemon.VAL.DONT_SET)
             assert pokemon.Pokemon.iv_cache is not None
             for mcp in [500, 1500, 2500, None]:
                 o = p.optimize_iv(cp_max=mcp,
@@ -43,29 +43,28 @@ def chunk(l, n):
         yield l[i: i + n]
 
 
-def find_optimal_multi(gm, iv_cache=pokemon.OPTIMAL_IV, threads=None, npokemon=None,
-                       forms=None, full_precision=True, simd=True):
+def find_optimal_multi(gm, args, full_precision=True, simd=True):
     """Coordinating process to run find_optimal_proc across multiple procs"""
     optimizer = IVOptimizer(gm, full_precision=full_precision, simd=simd)
-    iv_cache = pokemon.Cache(iv_cache)
+    iv_cache = pokemon.Cache(args.output)
     # forms to optimize
-    if forms:
-        missing = forms
+    if args.forms:
+        missing = args.forms
     else:
         missing = gm.pokemon.keys()
     # Find which pokemon are not in the list
     missing = [x for x in missing if x not in iv_cache]
-    if npokemon is not None:
-        missing = missing[:npokemon]
-    print("Computing optimal IVs for", len(missing), "pokemon using", threads, threads > 1 and "threads" or "thread")
+    if args.npokemon is not None:
+        missing = missing[:args.npokemon]
+    print("Computing optimal IVs for", len(missing), "pokemon using", args.threads, args.threads > 1 and "threads" or "thread")
     try:
-        if threads == 1:
+        if args.threads == 1:
             # just run serially
             od = optimizer.find_optimal_proc(missing)
             iv_cache.update(od)
         else:
             missing = chunk(missing, 20)
-            with multiprocessing.Pool(threads) as pool:
+            with multiprocessing.Pool(args.threads) as pool:
                 for rv in pool.imap_unordered(optimizer.find_optimal_proc, missing):
                     iv_cache.update(rv)
                     sys.stdout.write(".")
@@ -102,9 +101,7 @@ if __name__ == "__main__":
     full_precision = not args.low_precision
 
     gm = game_master.GameMaster()
-    optimal = find_optimal_multi(gm, args.output, threads=args.threads,
-                                 npokemon=args.npokemon, forms=args.forms,
-                                 full_precision=full_precision, simd=simd)
+    optimal = find_optimal_multi(gm, args, full_precision=full_precision, simd=simd)
 
     # reorder by highest stat product
     best = {}
