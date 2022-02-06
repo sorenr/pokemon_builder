@@ -18,7 +18,7 @@ import copy
     Retrieve, parse, and normalize data from GAME_MASTER.json
 """
 
-GAME_MASTER_URL = "https://github.com/PokeMiners/game_masters/blob/master/latest/latest.json?raw=true"
+GAME_MASTER_URL = "https://raw.githubusercontent.com/PokeMiners/game_masters/master/latest/latest.json"
 GAME_MASTER_PATH = GAME_MASTER_URL.rsplit('/', 1)[1].rsplit('?', 1)[0]
 
 
@@ -123,7 +123,7 @@ class League():
 
             levelRange = condition.get('pokemonLevelRange')
             if levelRange:
-                self.level_max = levelRange.get('obMaxLevel', self.level_max)
+                self.level_max = levelRange['maxLevel']
                 continue
 
             pokemonWhiteList = condition.get('pokemonWhiteList')
@@ -137,12 +137,14 @@ class League():
                 pokemonBanList = pokemonBanList['pokemon']
                 pokemonBanList = [x.get('form') or x.get('id') for x in pokemonBanList]
                 self.bannedPokemon.update(pokemonBanList)
+                continue
 
             withPokemonType = condition.get('withPokemonType')
             if withPokemonType:
                 withPokemonType = withPokemonType['pokemonType']
                 withPokemonType = {Types[x] for x in withPokemonType}
                 self.withPokemonType.update(withPokemonType)
+                continue
 
     def __str__(self):
         rv = [self.name]

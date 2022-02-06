@@ -27,12 +27,18 @@ class IVOptimizer():
         for name in names:
             p.update(name=name, fast=pokemon.VAL.DONT_SET, charged=pokemon.VAL.DONT_SET)
             assert pokemon.Pokemon.iv_cache is not None
-            for mcp in [500, 1500, 2500, None]:
-                o = p.optimize_iv(cp_max=mcp,
-                                  full_precision=self.full_precision,
-                                  simd=self.simd)
-                if o:
-                    optimal.setdefault(name, {})[mcp] = o
+            for cp_max in [500, 1500, 2500, None]:
+                o = None
+                for level_max in [self.gm.K_LEVEL_MAX, 40]:
+                    if o is None or o[3] > level_max:
+                        o = p.optimize_iv(cp_max,
+                                          level_max,
+                                          full_precision=self.full_precision,
+                                          simd=self.simd)
+                    # make sure we didn't exceed level_max
+                    assert(o[3] <= level_max)
+                    if o:
+                        optimal.setdefault(name, {}).setdefault(level_max, {})[cp_max] = o
         return optimal
 
 
@@ -56,15 +62,16 @@ def find_optimal_multi(gm, args, full_precision=True, simd=True):
     missing = [x for x in missing if x not in iv_cache]
     if args.npokemon is not None:
         missing = missing[:args.npokemon]
-    print("Computing optimal IVs for", len(missing), "pokemon using", args.threads, args.threads > 1 and "threads" or "thread")
+    threads = args.threads[0]
+    print("Computing optimal IVs for", len(missing), "pokemon using", threads, threads > 1 and "threads" or "thread")
     try:
-        if args.threads == 1:
+        if threads == 1:
             # just run serially
             od = optimizer.find_optimal_proc(missing)
             iv_cache.update(od)
         else:
             missing = chunk(missing, 20)
-            with multiprocessing.Pool(args.threads) as pool:
+            with multiprocessing.Pool(threads) as pool:
                 for rv in pool.imap_unordered(optimizer.find_optimal_proc, missing):
                     iv_cache.update(rv)
                     sys.stdout.write(".")
@@ -80,7 +87,7 @@ if __name__ == "__main__":
     """Not intended for standalone use."""
     parser = argparse.ArgumentParser(description='Retrieve and parse a GAME_MASTER.json file')
     parser.add_argument("-v", dest="verbose", help="verbose output", action="store_true")
-    parser.add_argument("-t", dest="threads", help="threads", type=int, default=multiprocessing.cpu_count())
+    parser.add_argument("-t", dest="threads", help="threads", nargs=1, type=int, default=[multiprocessing.cpu_count()])
     parser.add_argument("-n", dest="npokemon", help="number of pokemon to optimize", type=int)
     parser.add_argument("-o", dest="output", help="output JSON file", default=pokemon.OPTIMAL_IV)
     parser.add_argument("--serial", help="evaluate serially", action="store_true")
@@ -106,6 +113,7 @@ if __name__ == "__main__":
     # reorder by highest stat product
     best = {}
     for name, cps in optimal.items():
+        cps = cps[gm.K_LEVEL_MAX]
         for cp, data in cps.items():
             best.setdefault(cp, {})[data[5]] = list(data[:5]) + [name]
     for cp, monsters in best.items():

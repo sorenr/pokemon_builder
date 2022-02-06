@@ -489,12 +489,12 @@ class Pokemon():
             sp *= int(self.stamina)
             return int(sp + 0.5)  # round to the nearest int
 
-    def optimize_iv_serial(self, cp_max, full_precision=True):
+    def optimize_iv_serial(self, cp_max, level_max, full_precision=True):
         """Optimize IVs one combination at a time."""
         sp_optimal = None
         cp_optimal = None
         optimal = []
-        steps = range(2, 1 + 2 * self.gm.K_LEVEL_MAX)
+        steps = range(2, 1 + 2 * level_max)
         steps = [x * 0.5 for x in steps]
         for atk in range(0, 16):
             for defn in range(0, 16):
@@ -515,7 +515,7 @@ class Pokemon():
                             optimal.append((atk, defn, sta, lev, cp_t, sp_t))
         return optimal
 
-    def optimize_iv_simd(self, cp_max, full_precision=True):
+    def optimize_iv_simd(self, cp_max, level_max, full_precision=True):
         """Compute the optimal IV stat product using scipy arrays."""
         # make static arrays if it's the first time
         if not Pokemon._iv_setup:
@@ -528,14 +528,17 @@ class Pokemon():
             Pokemon._cpm = Pokemon._cpm.reshape(Pokemon._cpm.shape[0], 1)
             Pokemon._iv_setup = True
 
+        # consider rows up to the max row
+        row_max = 16**3 * (level_max * 2 - 1)
+
         # compute base attack/defense/stamina
-        ads = Pokemon._iv_ads + numpy.array([
+        ads = Pokemon._iv_ads[:row_max, :] + numpy.array([
             self.stats[self.gm.K_BASE_ATTACK],
             self.stats[self.gm.K_BASE_DEFENSE],
             self.stats[self.gm.K_BASE_STAMINA]])
 
         # compute cp
-        ads *= Pokemon._cpm
+        ads *= Pokemon._cpm[:row_max]
 
         # 0.1 * attack * sqrt(defense) * sqrt(stamina)
         cp = 0.1 * ads[:, 0] * numpy.prod(numpy.power(ads[:, 1:3], 0.5), axis=1)
@@ -586,10 +589,10 @@ class Pokemon():
             ])
         return optimal
 
-    def optimize_iv(self, cp_max, simd=True, full_precision=True):
+    def optimize_iv(self, cp_max, level_max, simd=True, full_precision=True):
         """Optimize the IV stat product & level for a given CP cap."""
         try:
-            o = Pokemon.iv_cache[self.name][cp_max]
+            o = Pokemon.iv_cache[self.name][level_max][cp_max]
             if o is not None:
                 # update to the optimal cached stats
                 self.update(attack=o[0], defense=o[1], stamina=o[2], level=o[3])
@@ -599,14 +602,14 @@ class Pokemon():
             pass
 
         # return max CP if we have no limit, or max IV is below the cap
-        self.update(attack=15, defense=15, stamina=15, level=self.gm.K_LEVEL_MAX)
+        self.update(attack=15, defense=15, stamina=15, level=level_max)
         cp = self.cp()
-        o = [15, 15, 15, self.gm.K_LEVEL_MAX, self.cp(), self.stat_product(full_precision=full_precision)]
-        if cp_max is None:
+        o = [15, 15, 15, level_max, self.cp(), self.stat_product(full_precision=full_precision)]
+        if cp_max in [None, self.gm.K_LEVEL_MAX]:
             return o
         if cp <= cp_max:
             logging.debug("%s 15/15/15/%d=%d, under the %s IV cap", self.name, self.level, cp, cp_max)
-            Pokemon.iv_cache.setdefault(self.name, {})[cp_max] = o
+            Pokemon.iv_cache.setdefault(self.name, {}).setdefault(level_max, {})[cp_max] = o
             Pokemon.iv_cache.dirty = True
             return o
 
@@ -615,15 +618,15 @@ class Pokemon():
         cp = self.cp()
         if cp_max is not None and cp > cp_max:
             logging.debug("%s 0/0/0/1=%d exceeds the %d IV cap", self.name, cp, cp_max)
-            Pokemon.iv_cache.setdefault(self.name, {})[cp_max] = False
+            Pokemon.iv_cache.setdefault(self.name, {}).setdefault(level_max, {})[cp_max] = False
             Pokemon.iv_cache.dirty = True
             return False
 
         # find the optimal IV/level combination
         if simd:
-            optimal = self.optimize_iv_simd(cp_max=cp_max, full_precision=full_precision)
+            optimal = self.optimize_iv_simd(cp_max, level_max, full_precision=full_precision)
         else:
-            optimal = self.optimize_iv_serial(cp_max=cp_max, full_precision=full_precision)
+            optimal = self.optimize_iv_serial(cp_max, level_max, full_precision=full_precision)
 
         if optimal:
             # select the first optimal result from the sorted list
@@ -631,7 +634,7 @@ class Pokemon():
             # update the stats with the optimal values
             self.update(attack=o[0], defense=o[1], stamina=o[2], level=o[3])
             # cache the result for the next time
-            Pokemon.iv_cache.setdefault(self.name, {})[cp_max] = o
+            Pokemon.iv_cache.setdefault(self.name, {}).setdefault(level_max, {})[cp_max] = o
             Pokemon.iv_cache.dirty = True
             return o
         return False
@@ -888,22 +891,22 @@ class PokemonUnitTest(unittest.TestCase):
         t_serial = 0
         for i in range(3):
             p = Pokemon(self.gm, attack=0, defense=0, stamina=0, level=1)
-
+            level_max = random.choice([40, self.gm.K_LEVEL_MAX])
             t_serial -= time.time()
-            oo = p.optimize_iv_serial(cp_max=2500, full_precision=True)[0]
+            oo = p.optimize_iv_serial(cp_max=2500, level_max=level_max, full_precision=True)[0]
             t_serial += time.time()
             t_simd -= time.time()
-            os = p.optimize_iv_simd(cp_max=2500, full_precision=True)[0]
+            os = p.optimize_iv_simd(cp_max=2500, level_max=level_max, full_precision=True)[0]
             t_simd += time.time()
             logging.info("iv_serial %s %s True", p.name, oo)
             logging.info("  iv_simd %s %s True", p.name, os)
             self.assertEqualParts(oo, os, delta=3)
 
             t_serial -= time.time()
-            oo = p.optimize_iv_serial(cp_max=2500, full_precision=False)[0]
+            oo = p.optimize_iv_serial(cp_max=2500, level_max=level_max, full_precision=False)[0]
             t_serial += time.time()
             t_simd -= time.time()
-            os = p.optimize_iv_simd(cp_max=2500, full_precision=False)[0]
+            os = p.optimize_iv_simd(cp_max=2500, level_max=level_max, full_precision=False)[0]
             t_simd += time.time()
             logging.info("iv_serial %s %s True", p.name, oo)
             logging.info("  iv_simd %s %s True", p.name, os)
