@@ -404,10 +404,7 @@ class Pokemon():
     def cp(self):
         # CP = (Attack * Defense^0.5 * Stamina^0.5 * CP_Multiplier^2) / 10
         # https://gamepress.gg/pokemongo/pokemon-stats-advanced#cp-multiplier
-        rv = self.attack
-        rv *= pow(self.defense, 0.5)
-        rv *= pow(self.stamina, 0.5)
-        return rv / 10
+        return self.attack * pow(self.defense * self.stamina, 0.5) / 10
 
     def reset(self, shields=1):
         """Reset attack/defense/stamina after combat."""
@@ -517,13 +514,13 @@ class Pokemon():
 
     def optimize_iv_simd(self, cp_max, level_max, full_precision=True):
         """Compute the optimal IV stat product using scipy arrays."""
+        dtype_f = None # numpy.float32
         # make static arrays if it's the first time
         if not Pokemon._iv_setup:
-            ivs = numpy.arange(16, dtype=numpy.float32)
+            ivs = numpy.arange(16, dtype=dtype_f)
             steps = range(2, 1 + 2 * self.gm.K_LEVEL_MAX)
-            cpm = numpy.array([self.gm.cp_multiplier(x * 0.5) for x in steps])
+            cpm = numpy.array([self.gm.cp_multiplier(x * 0.5) for x in steps], dtype=dtype_f)
             Pokemon._iv_adsl = numpy.array(numpy.meshgrid(ivs, ivs, ivs, cpm)).T.reshape(-1, 4)
-            Pokemon._iv_ads = Pokemon._iv_adsl[:, 0:3]
             Pokemon._cpm = Pokemon._iv_adsl[:, -1]
             Pokemon._cpm = Pokemon._cpm.reshape(Pokemon._cpm.shape[0], 1)
             Pokemon._iv_setup = True
@@ -532,7 +529,7 @@ class Pokemon():
         row_max = 16**3 * (level_max * 2 - 1)
 
         # compute base attack/defense/stamina
-        ads = Pokemon._iv_ads[:row_max, :] + numpy.array([
+        ads = Pokemon._iv_adsl[:row_max, :3] + numpy.array([
             self.stats[self.gm.K_BASE_ATTACK],
             self.stats[self.gm.K_BASE_DEFENSE],
             self.stats[self.gm.K_BASE_STAMINA]])
@@ -541,10 +538,12 @@ class Pokemon():
         ads *= Pokemon._cpm[:row_max]
 
         # 0.1 * attack * sqrt(defense) * sqrt(stamina)
-        cp = 0.1 * ads[:, 0] * numpy.prod(numpy.power(ads[:, 1:3], 0.5), axis=1)
+        ds = numpy.prod(ads[:, 1:3], axis=1)
+        ds = numpy.power(ds, 0.5)
+        cp = 0.1 * ads[:, 0] * ds
 
         # extract cp < cp_max
-        i_good = numpy.extract(cp < cp_max + 1, numpy.arange(len(cp)))
+        i_good = numpy.where(cp < cp_max + 1)
         adsl = Pokemon._iv_adsl[i_good]
         ads = ads[i_good]
         cp = cp[i_good]
@@ -561,14 +560,16 @@ class Pokemon():
             sp = numpy.around(sp).astype(numpy.uint32)
 
         # filter results with max stat product
-        i_max = numpy.nonzero(sp == numpy.max(sp))[0]
-        o = adsl[i_max]
+        assert(len(adsl) == len(sp))
+        i_max = numpy.where(sp == numpy.max(sp))
+        adsl = adsl[i_max]
         cp = cp[i_max]
         sp = sp[i_max]
 
         # filter results with same stat product, max cp
-        i_max = numpy.nonzero(cp == numpy.max(cp))[0]
-        o = o[i_max]
+        assert(len(adsl) == len(cp))
+        i_max = numpy.where(cp == numpy.max(cp))
+        adsl = adsl[i_max]
         cp = cp[i_max]
         sp = sp[i_max]
 
@@ -578,7 +579,8 @@ class Pokemon():
             sp = [int(x) for x in sp]
 
         optimal = []
-        for i, row in enumerate(o):
+        for i, row in enumerate(adsl):
+            assert(max(row[0], row[1], row[2]) <= 15)
             optimal.append([
                 int(row[0]),
                 int(row[1]),
