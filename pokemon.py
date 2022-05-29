@@ -192,7 +192,7 @@ class Cache(dict):
         if not newpath:
             newpath = self.path
         with open(newpath, 'w') as fd:
-            json.dump(self.write_prep(self), fd, sort_keys=True)
+            json.dump(self.write_prep(self), fd, sort_keys=True, indent=4)
         logging.info("Wrote %d entries to %s", len(self), self.path)
         self.dirty = False
         return newpath

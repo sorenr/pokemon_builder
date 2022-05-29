@@ -111,6 +111,7 @@ class League():
         self.pokemonCount = data['pokemonCount']
         self.pokemonWhiteList = set()
         self.withPokemonType = set()
+        self.allowTempEvos = data.get('allowTempEvos')
 
         self.bannedPokemon = set(data.get('bannedPokemon', []))
 
@@ -331,7 +332,7 @@ class GameMaster():
             if r:
                 settings = data['formSettings']
                 baseName = settings['pokemon']
-                for formSettings in settings.get('forms', []):
+                for formSettings in filter(None, settings.get('forms', [])):
                     formName = formSettings['form']
                     self.forms.setdefault(baseName, []).append(formName)
                 continue
