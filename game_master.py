@@ -366,7 +366,7 @@ class GameMaster():
                 # add the mega evolved forms
                 for tempEvo in settings.get(GameMaster.K_EVOLUTION_OVERRIDES, []):
                     evoId = tempEvo.get('tempEvoId')
-                    if not evoId.startswith(GameMaster.K_EVOLUTION_MEGA):
+                    if not evoId or not evoId.startswith(GameMaster.K_EVOLUTION_MEGA):
                         continue
                     settings_mega = copy.deepcopy(settings)
                     settings_mega[GameMaster.K_TYPE1] = tempEvo['typeOverride1']
