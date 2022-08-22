@@ -169,42 +169,39 @@ class GameMaster():
     _re_move = re.compile(r'V(\d+)_MOVE_(.+)')
     _re_combat_move = re.compile(r'COMBAT_V(\d+)_MOVE_(.+)')
 
-    K_STATS = "stats"
+    K_BASE_ATTACK = "baseAttack"
+    K_BASE_DEFENSE = "baseDefense"
+    K_BASE_STAMINA = "baseStamina"
+    K_BONUS_DEF = "defenseBonusMultiplier"
+    K_CHARGED = "cinematicMoves"
+    K_CHARGED_ELITE = "eliteCinematicMove"
+    K_CHARGED_LEGACY = "legacyCinematicMove"
+    K_ENERGY_DELTA = "energy_delta"
+    K_EVOLUTION_MEGA = 'TEMP_EVOLUTION_MEGA'
+    K_EVOLUTION_OVERRIDES = 'tempEvoOverrides'
     K_FAST = "quickMoves"
     K_FAST_ELITE = "eliteQuickMove"
     K_FAST_LEGACY = "legacyQuickMove"
     K_FAST_SUFFIX = "_FAST"  # fast move suffix
     K_FAST_INFIX = "_FAST"  # fast move suffix
-    K_CHARGED = "cinematicMoves"
-    K_CHARGED_ELITE = "eliteCinematicMove"
-    K_CHARGED_LEGACY = "legacyCinematicMove"
-    K_SMEARGLE = "SMEARGLE"
-    K_SMEARGLE_MOVES = "SMEARGLE_MOVES_SETTINGS"
+    K_FORM = "form"
+    K_ID_UNIQUE = "pokemonId"
+    K_IS_MEGA = "is_mega"
+    K_LEAGUE = 'COMBAT_LEAGUE_VS_SEEKER_'
     K_NORMAL_SUFFIX = "_NORMAL"  # Normal suffix
     K_POWER = "power"
-    K_ENERGY_DELTA = "energy_delta"
-    K_ID_UNIQUE = "pokemonId"
-    K_TYPE1 = "type"
-    K_TYPE2 = "type2"
-    K_IS_MEGA = "is_mega"
-    K_EVOLUTION_MEGA = 'TEMP_EVOLUTION_MEGA'
-    K_EVOLUTION_OVERRIDES = 'tempEvoOverrides'
-
-    K_BASE_ATTACK = "baseAttack"
-    K_BASE_DEFENSE = "baseDefense"
-    K_BASE_STAMINA = "baseStamina"
-
-    K_BONUS_DEF = "defenseBonusMultiplier"
-
-    K_LEAGUE = 'COMBAT_LEAGUE_VS_SEEKER_'
-
+    K_PURIFIED_SUFFIX = "_PURIFIED"
+    K_PURIFIED_CHARGED = "purifiedChargeMove"
     K_SHADOW = "shadow"
     K_SHADOW_SUFFIX = "_SHADOW"
     K_SHADOW_BONUS_DEF = "shadowPokemonDefenseBonusMultiplier"
     K_SHADOW_BONUS_ATK = "shadowPokemonAttackBonusMultiplier"
     K_SHADOW_CHARGED = "shadowChargeMove"
-    K_PURIFIED_SUFFIX = "_PURIFIED"
-    K_PURIFIED_CHARGED = "purifiedChargeMove"
+    K_SMEARGLE = "SMEARGLE"
+    K_SMEARGLE_MOVES = "SMEARGLE_MOVES_SETTINGS"
+    K_STATS = "stats"
+    K_TYPE1 = "type"
+    K_TYPE2 = "type2"
 
     # Max level to calculate under normal circumstances
     K_LEVEL_MAX = 51
@@ -355,8 +352,10 @@ class GameMaster():
                 settings = data['pokemonSettings']
                 assert settings
                 # form name takes precedence over family name
-                name = settings.get('form') or settings.get('uniqueId') or settings.get('pokemonId')
+
+                name = settings.get(self.K_FORM) or settings.get('uniqueId') or settings.get('pokemonId')
                 assert name
+
                 if not settings.get(GameMaster.K_STATS, {}):
                     logging.warning("%s has unspecified stats. Skipping...", name)
                     continue
