@@ -62,6 +62,9 @@ class Types(enum.Enum):
     def __str__(self):
         return self.name[13:]
 
+    def __int__(self):
+        return self.value
+
 
 TYPE_LIST = sorted(list(Types), key=lambda t: t.value)
 
@@ -331,7 +334,7 @@ class GameMaster():
                 baseName = settings['pokemon']
                 for formSettings in filter(None, settings.get('forms', [])):
                     formName = formSettings['form']
-                    self.forms.setdefault(baseName, []).append(formName)
+                    self.forms.setdefault(baseName, set()).add(formName)
                 continue
 
             # make type effectiveness
