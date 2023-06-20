@@ -359,6 +359,9 @@ class GameMaster():
                 name = settings.get(self.K_FORM) or settings.get('uniqueId') or settings.get('pokemonId')
                 assert name
 
+                # One form of FORMS_V0025_POKEMON_PIKACHU has an integer name
+                name = str(name)
+
                 if not settings.get(GameMaster.K_STATS, {}):
                     logging.warning("%s has unspecified stats. Skipping...", name)
                     continue
