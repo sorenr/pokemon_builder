@@ -7,6 +7,7 @@ import matplotlib
 import pandas
 import seaborn
 import datetime
+import sys
 
 
 def GetStats(gm: game_master.GameMaster, name: str):
@@ -29,26 +30,22 @@ def GetType(gm: game_master.GameMaster, name: str):
 
 def GetData():
     gm = game_master.GameMaster()
-    print()
 
     names = sorted(gm.pokemon.keys())
 
-    print(names)
-
     p_types = {}
 
-    for name in names:
+    for name in sorted(names):
+        print(name)
         p_type = GetType(gm, name)
         p_stats = GetStats(gm, name)
-        p_types.setdefault(p_type, set()).add(p_stats)
+        p_types.setdefault(p_type, {}).setdefault(p_stats, set()).add(name)
 
     return p_types
 
 
-def PlotData(data:dict):
-    pprint.pprint(data)
-
-    grid_np = numpy.zeros( (18, 18), dtype=int )
+def PlotData(data: dict):
+    grid_np = numpy.zeros((18, 18), dtype=int)
     for k, v in data.items():
         i = k[0].value
         if len(k) == 1:
@@ -82,4 +79,5 @@ if __name__ == "__main__":
     numpy.random.seed(0)
     seaborn.set_theme()
     data = GetData()
+    pprint.pprint(data)
     PlotData(data)
