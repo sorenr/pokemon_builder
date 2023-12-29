@@ -59,11 +59,11 @@ class Move():
                     name = possible_match[0]
                 else:
                     raise game_master.PokemonKeyError(name, self.pokemon.possible_moves)
-        self.name = name
         try:
-            self.data = self.pokemon.moves[self.name]
+            self.data = self.pokemon.moves[name]
         except KeyError:
-            raise game_master.PokemonKeyError(self.name, self.pokemon.moves)
+            raise game_master.PokemonKeyError(self.name, self.pokemon.moves.keys())
+        self.name = self.data[self.gm.K_MOVE_NAME]
         self.buffs = self.data.get("buffs")
         self.cooldown = self.data.get('durationTurns', 0)
         self.energy_delta = self.data.get('energyDelta', 0)

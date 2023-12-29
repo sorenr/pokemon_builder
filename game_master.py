@@ -138,9 +138,9 @@ class League():
 
             pokemonBanList = condition.get('pokemonBanList')
             if pokemonBanList:
-                pokemonBanList = pokemonBanList['pokemon']
-                pokemonBanList = [x.get('form') or x.get('id') for x in pokemonBanList]
-                self.bannedPokemon.update(pokemonBanList)
+                for bannedPokemon in pokemonBanList['pokemon']:
+                    bannedPokemon = bannedPokemon.get('forms') or [bannedPokemon.get('id')]
+                    self.bannedPokemon.update(bannedPokemon)
                 continue
 
             withPokemonType = condition.get('withPokemonType')
@@ -191,6 +191,8 @@ class GameMaster():
     K_ID_UNIQUE = "pokemonId"
     K_IS_MEGA = "is_mega"
     K_LEAGUE = 'COMBAT_LEAGUE_VS_SEEKER_'
+    K_MOVE_NAME = 'moveName'
+    K_MOVE_NUM = 'moveNum'
     K_NORMAL_SUFFIX = "_NORMAL"  # Normal suffix
     K_POWER = "power"
     K_PURIFIED_SUFFIX = "_PURIFIED"
@@ -388,22 +390,29 @@ class GameMaster():
 
                 continue
 
+            settings_move = None
+            settings_move_context = None
+
             # store move settings
             r = self._re_move.match(tid)
             if r:
-                settings = data['moveSettings']
-                name = settings['movementId']
-                assert name not in self.moves_battle
-                self.moves_battle[name] = settings
-                continue
+                settings_move = data['moveSettings']
+                settings_move_context = self.moves_battle
+            else:
+                r = self._re_combat_move.match(tid)
+                if r:
+                    settings_move = data['combatMove']
+                    settings_move_context = self.moves_combat
 
-            # store combat (pvp) move settings
-            r = self._re_combat_move.match(tid)
-            if r:
-                settings = data['combatMove']
-                name = r.group(2)
-                assert name not in self.moves_combat
-                self.moves_combat[name] = settings
+            if settings_move:
+                moveNum = int(r.group(1))
+                moveName = r.group(2)
+                assert moveNum not in settings_move_context
+                assert moveName not in settings_move_context
+                settings_move[self.K_MOVE_NUM] = moveNum
+                settings_move[self.K_MOVE_NAME] = moveName
+                settings_move_context[moveNum] = settings_move
+                settings_move_context[moveName] = settings_move
                 continue
 
             # warn about a possibly important item we're ignoring
@@ -418,6 +427,20 @@ class GameMaster():
         # make "type" consistent between moves_combat and moves_battle
         for v in self.moves_battle.values():
             v['type'] = v['pokemonType']
+
+        # Some moves in pokemon move lists are numeric. Change them to strings.
+        # Example: Xerneas 387 => GEOMANCY_FAST
+        for p, d in self.pokemon.items():
+            for moves_type in [self.K_FAST, self.K_FAST_ELITE, self.K_FAST_LEGACY, self.K_CHARGED, self.K_CHARGED_ELITE, self.K_CHARGED_LEGACY]:
+                print_new = False
+                moves_new = []
+                for i, move_old in enumerate(d.get(moves_type, [])):
+                    move_new = self.moves_combat[move_old][self.K_MOVE_NAME]
+                    if type(move_old) == type(move_new):
+                        assert move_old == move_new
+                    else:
+                        print(p, moves_type, move_old, "=>", move_new)
+                        d[moves_type][i] = move_new
 
         # re-index effectiveness by enum index
         self.effectiveness = {t.value: self.effectiveness[t.name] for t in [Types(x) for x in TYPE_LIST]}
