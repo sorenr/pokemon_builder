@@ -179,7 +179,7 @@ class GameMaster():
     K_CHARGED = "cinematicMoves"
     K_CHARGED_ELITE = "eliteCinematicMove"
     K_CHARGED_LEGACY = "legacyCinematicMove"
-    K_ENERGY_DELTA = "energy_delta"
+    K_ENERGY_DELTA = "energyDelta"
     K_EVOLUTION_MEGA = 'TEMP_EVOLUTION_MEGA'
     K_EVOLUTION_OVERRIDES = 'tempEvoOverrides'
     K_FAST = "quickMoves"
@@ -191,7 +191,8 @@ class GameMaster():
     K_ID_UNIQUE = "pokemonId"
     K_IS_MEGA = "is_mega"
     K_LEAGUE = 'COMBAT_LEAGUE_VS_SEEKER_'
-    K_MOVE_NAME = 'moveName'
+    K_MOVE_NAME = 'uniqueId'
+    K_MOVE_TYPE = 'type'
     K_MOVE_NUM = 'moveNum'
     K_NORMAL_SUFFIX = "_NORMAL"  # Normal suffix
     K_POWER = "power"
@@ -506,28 +507,33 @@ class GameMaster():
         rv = set()
         for move in moves:
             move_data = self.moves_combat[move]
-            name = move_data['uniqueId']
-            power = move_data.get(GameMaster.K_POWER, 0)
-            delta = move_data.get(GameMaster.K_ENERGY_DELTA, 0)
-            best_t = best.setdefault(move_data['type'], {})
+            move_name = move_data[GameMaster.K_MOVE_NAME]
+            move_power = move_data.get(GameMaster.K_POWER, 0)
+            move_delta = move_data.get(GameMaster.K_ENERGY_DELTA, 0)
+            move_type = move_data[GameMaster.K_MOVE_TYPE]
+            moves_type_best = best.setdefault(move_type, set())
+            print("CHECKING", move_name, move_type, move_power, move_delta)
+            print(move_data)
             add = True
-            for bname in list(best_t.keys()):
-                bdata = best_t[bname]
-                bpower = bdata.get(GameMaster.K_POWER, 0)
-                bdelta = bdata.get(GameMaster.K_ENERGY_DELTA, 0)
+            for move_best_name in list(moves_type_best):
+                move_best_data = self.moves_combat[move_best_name]
+                move_best_power = move_best_data.get(GameMaster.K_POWER, 0)
+                move_best_delta = move_best_data.get(GameMaster.K_ENERGY_DELTA, 0)
                 # FIXME: consider lasting effects
-                if power > bpower and delta > bdelta:
-                    # print("Deleting", bname, "<", move_data['uniqueId'])
-                    del best_t[bname]
-                    rv.remove(bname)
-                if power <= bpower and delta <= bdelta:
-                    # print("Skipping", bname, ">", move_data['uniqueId'], power, delta)
+                if move_power > move_best_power and move_delta > move_best_delta:
+                    print("Deleting", move_best_name, move_best_power, move_best_delta, "<", move_name, move_power, move_delta)
+                    moves_type_best.remove(move_best_name)
+                if move_power <= move_best_power and move_delta <= move_best_delta:
+                    print("Skipping", move_best_name, move_best_power, move_best_delta, ">", move_name, move_power, move_delta)
                     add = False
                     break
             if add:
-                # print("Adding", move_data['uniqueId'], power, delta)
-                best_t[name] = move_data
-                rv.add(name)
+                print("Adding", move_name, move_power, move_delta)
+                moves_type_best.add(move_name)
+        import pprint
+        pprint.pprint(best)
+        for _, best_moves in best.items():
+            rv = rv.union(best_moves)
         return rv
 
     def move_combinations(self, name, is_shadow, is_purified, r=2, best=False):
