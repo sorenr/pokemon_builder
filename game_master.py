@@ -133,13 +133,14 @@ class League():
             pokemonWhiteList = condition.get('pokemonWhiteList')
             if pokemonWhiteList:
                 for pattr in pokemonWhiteList['pokemon']:
-                    self.pokemonWhiteList.add(pattr.get('form', pattr['id']))
+                    pattr = pattr.get(GameMaster.K_FORMS) or [pattr['id']]
+                    self.pokemonWhiteList.update( pattr )
                 continue
 
             pokemonBanList = condition.get('pokemonBanList')
             if pokemonBanList:
                 for bannedPokemon in pokemonBanList['pokemon']:
-                    bannedPokemon = bannedPokemon.get('forms') or [bannedPokemon.get('id')]
+                    bannedPokemon = bannedPokemon.get(GameMaster.K_FORMS) or [bannedPokemon.get('id')]
                     self.bannedPokemon.update(bannedPokemon)
                 continue
 
@@ -188,6 +189,7 @@ class GameMaster():
     K_FAST_SUFFIX = "_FAST"  # fast move suffix
     K_FAST_INFIX = "_FAST"  # fast move suffix
     K_FORM = "form"
+    K_FORMS = "forms"
     K_ID_UNIQUE = "pokemonId"
     K_IS_MEGA = "is_mega"
     K_LEAGUE = 'COMBAT_LEAGUE_VS_SEEKER_'
