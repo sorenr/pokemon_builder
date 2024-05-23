@@ -552,8 +552,11 @@ class GameMaster():
             possible_fast = self.best_moves(possible_fast)
             possible_charged = self.best_moves(possible_charged)
         for fast in possible_fast:
-            for charged in itertools.combinations(possible_charged, r):
-                yield fast, charged
+            if len(possible_charged) <= r:
+                yield fast, tuple(possible_charged)
+            else:
+                for charged in itertools.combinations(possible_charged, r):
+                    yield fast, charged
 
     def report(self):
         """Write a summary of the data we've received."""
