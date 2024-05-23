@@ -180,6 +180,7 @@ class GameMaster():
     K_CHARGED = "cinematicMoves"
     K_CHARGED_ELITE = "eliteCinematicMove"
     K_CHARGED_LEGACY = "legacyCinematicMove"
+    K_DIALGA_ORIGIN = "DIALGA_ORIGIN"
     K_ENERGY_DELTA = "energyDelta"
     K_EVOLUTION_MEGA = 'TEMP_EVOLUTION_MEGA'
     K_EVOLUTION_OVERRIDES = 'tempEvoOverrides'
@@ -197,6 +198,7 @@ class GameMaster():
     K_MOVE_TYPE = 'type'
     K_MOVE_NUM = 'moveNum'
     K_NORMAL_SUFFIX = "_NORMAL"  # Normal suffix
+    K_PALKIA_ORIGIN = "PALKIA_ORIGIN"
     K_POWER = "power"
     K_PURIFIED_SUFFIX = "_PURIFIED"
     K_PURIFIED_CHARGED = "purifiedChargeMove"
@@ -426,6 +428,10 @@ class GameMaster():
         assert GameMaster.K_CHARGED not in self.pokemon[GameMaster.K_SMEARGLE]
         self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_FAST] = smeargle_moves[GameMaster.K_FAST]
         self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_CHARGED] = smeargle_moves[GameMaster.K_CHARGED]
+
+        # Add non-tm moves
+        self.pokemon[GameMaster.K_PALKIA_ORIGIN][GameMaster.K_CHARGED].append('SPACIAL_REND')
+        self.pokemon[GameMaster.K_DIALGA_ORIGIN][GameMaster.K_CHARGED].append('ROAR_OF_TIME')
 
         # make "type" consistent between moves_combat and moves_battle
         for v in self.moves_battle.values():
