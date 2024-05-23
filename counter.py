@@ -171,8 +171,6 @@ def counter(gm, opponent_names, shields, max_cp=None, threads=1):
     ranker = Ranker(gm, opponent_names, shields=shields, max_cp=max_cp)
 
     team_names = list(gm.pokemon.keys())
-    # smeargle has too many move combinations
-    team_names.remove('SMEARGLE')
 
     rank_func = ranker.rank_ttk
     # rank_func = ranker.rank_combat
