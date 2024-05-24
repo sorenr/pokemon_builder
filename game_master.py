@@ -284,6 +284,10 @@ class GameMaster():
             if tid.startswith(ignore):
                 return True
         return False
+    
+    def smeargle_simplify(self):
+        self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_FAST] = ['LOCK_ON_FAST']
+        self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_CHARGED] = ['FLYING_PRESS']
 
     def normalize_data(self):
         self.effectiveness = {}  # type effectiveness
