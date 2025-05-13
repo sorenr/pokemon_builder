@@ -180,7 +180,6 @@ class GameMaster():
     K_CHARGED = "cinematicMoves"
     K_CHARGED_ELITE = "eliteCinematicMove"
     K_CHARGED_LEGACY = "legacyCinematicMove"
-    K_DIALGA_ORIGIN = "DIALGA_ORIGIN"
     K_ENERGY_DELTA = "energyDelta"
     K_EVOLUTION_MEGA = 'TEMP_EVOLUTION_MEGA'
     K_EVOLUTION_OVERRIDES = 'tempEvoOverrides'
@@ -198,7 +197,6 @@ class GameMaster():
     K_MOVE_TYPE = 'type'
     K_MOVE_NUM = 'moveNum'
     K_NORMAL_SUFFIX = "_NORMAL"  # Normal suffix
-    K_PALKIA_ORIGIN = "PALKIA_ORIGIN"
     K_POWER = "power"
     K_PURIFIED_SUFFIX = "_PURIFIED"
     K_PURIFIED_CHARGED = "purifiedChargeMove"
@@ -286,8 +284,9 @@ class GameMaster():
         return False
     
     def smeargle_simplify(self):
-        self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_FAST] = ['LOCK_ON_FAST']
-        self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_CHARGED] = ['FLYING_PRESS']
+        if GameMaster.K_SMEARGLE in self.pokemon:
+            self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_FAST] = ['LOCK_ON_FAST']
+            self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_CHARGED] = ['FLYING_PRESS']
 
     def normalize_data(self):
         self.effectiveness = {}  # type effectiveness
@@ -307,6 +306,7 @@ class GameMaster():
         for item in self._game_master:
             tid = item['templateId']
             data = item['data']
+            smeargle_moves = None
 
             # ignore suffixes
             # if self._should_ignore(tid):
@@ -430,12 +430,21 @@ class GameMaster():
         # Add Smeargle's moves
         assert GameMaster.K_FAST not in self.pokemon[GameMaster.K_SMEARGLE]
         assert GameMaster.K_CHARGED not in self.pokemon[GameMaster.K_SMEARGLE]
-        self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_FAST] = smeargle_moves[GameMaster.K_FAST]
-        self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_CHARGED] = smeargle_moves[GameMaster.K_CHARGED]
+        if smeargle_moves:
+            self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_FAST] = smeargle_moves[GameMaster.K_FAST]
+            self.pokemon[GameMaster.K_SMEARGLE][GameMaster.K_CHARGED] = smeargle_moves[GameMaster.K_CHARGED]
+        else:
+            print("No smeargle moves. Deleting Smeargle.")
+            del self.pokemon[GameMaster.K_SMEARGLE]
 
         # Add non-tm moves
-        self.pokemon[GameMaster.K_PALKIA_ORIGIN][GameMaster.K_CHARGED].append('SPACIAL_REND')
-        self.pokemon[GameMaster.K_DIALGA_ORIGIN][GameMaster.K_CHARGED].append('ROAR_OF_TIME')
+        self.pokemon['RAYQUAZA'][GameMaster.K_CHARGED].append('DRAGON_ASCENT')
+        self.pokemon['PALKIA_ORIGIN'][GameMaster.K_CHARGED].append('SPACIAL_REND')
+        self.pokemon['DIALGA_ORIGIN'][GameMaster.K_CHARGED].append('ROAR_OF_TIME')
+        self.pokemon['NECROZMA_DAWN_WINGS'][GameMaster.K_CHARGED].append('MOONGEIST_BEAM')
+        self.pokemon['NECROZMA_DUSK_MANE'][GameMaster.K_CHARGED].append('SUNSTEEL_STRIKE')
+        self.pokemon['KYUREM_WHITE'][GameMaster.K_CHARGED].append('ICE_BURN')
+        self.pokemon['KYUREM_BLACK'][GameMaster.K_CHARGED].append('FREEZE_SHOCK')
 
         # make "type" consistent between moves_combat and moves_battle
         for v in self.moves_battle.values():
