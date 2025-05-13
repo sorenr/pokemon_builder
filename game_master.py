@@ -452,17 +452,15 @@ class GameMaster():
 
         # Some moves in pokemon move lists are numeric. Change them to strings.
         # Example: Xerneas 387 => GEOMANCY_FAST
-        for p, d in self.pokemon.items():
+        for poke, pdata in self.pokemon.items():
             for moves_type in [self.K_FAST, self.K_FAST_ELITE, self.K_FAST_LEGACY, self.K_CHARGED, self.K_CHARGED_ELITE, self.K_CHARGED_LEGACY]:
-                print_new = False
-                moves_new = []
-                for i, move_old in enumerate(d.get(moves_type, [])):
-                    move_new = self.moves_combat[move_old][self.K_MOVE_NAME]
-                    if type(move_old) == type(move_new):
-                        assert move_old == move_new
-                    else:
-                        print(p, moves_type, move_old, "=>", move_new)
-                        d[moves_type][i] = move_new
+                for i, move_old in enumerate(pdata.get(moves_type, [])):
+                    print( moves_type, i, move_old )
+                    move_new = self.moves_combat[move_old]
+                    move_new = move_new[self.K_MOVE_NAME]
+                    if type(move_old) is not type(move_new):
+                        print(poke, moves_type, move_old, "=>", move_new)
+                        pdata[moves_type][i] = move_new
 
         # re-index effectiveness by enum index
         self.effectiveness = {t.value: self.effectiveness[t.name] for t in [Types(x) for x in TYPE_LIST]}
